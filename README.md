@@ -6,7 +6,9 @@ Display Sleep Enforcer is a small Windows tray application that forces displays 
 
 ## Screenshot
 
-![Display Sleep Enforcer main window](source/screenshot.png)
+| Light | Dark |
+| :---: | :---: |
+| <img src="source/lightscreenshot.png" width="360" alt="Display Sleep Enforcer (light theme)"> | <img src="source/darkscreenshot.png" width="360" alt="Display Sleep Enforcer (dark theme)"> |
 
 ## Why this exists
 
