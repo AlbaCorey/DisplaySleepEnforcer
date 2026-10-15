@@ -1,5 +1,5 @@
 ; Display Sleep Enforcer - force display sleep, including while locked.
-; Copyright (C) 2026 ferdef150
+; Copyright (C) 2026 AlbaCorey
 ;
 ; This program is free software: you can redistribute it and/or modify it under
 ; the terms of the GNU General Public License as published by the Free Software
