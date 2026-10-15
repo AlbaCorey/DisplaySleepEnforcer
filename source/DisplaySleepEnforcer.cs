@@ -551,7 +551,9 @@ internal sealed class Enforcer
 
 internal sealed class MainForm : Form
 {
-    private readonly NumericUpDown _idleNum;
+    private readonly NumericUpDown _idleHours;
+    private readonly NumericUpDown _idleMinutes;
+    private readonly NumericUpDown _idleSeconds;
     private readonly NumericUpDown _enforceNum;
     private readonly Button _startButton;
     private readonly Button _forceButton;
@@ -581,17 +583,23 @@ internal sealed class MainForm : Form
         }
 
         Label idleLabel = new Label();
-        idleLabel.Text = "Turn displays off after (seconds idle):";
+        idleLabel.Text = "Turn displays off after (hh:mm:ss):";
         idleLabel.Location = new Point(12, 15);
         idleLabel.AutoSize = true;
 
-        _idleNum = new NumericUpDown();
-        _idleNum.Location = new Point(290, 12);
-        _idleNum.Size = new Size(110, 23);
-        _idleNum.Minimum = 5;
-        _idleNum.Maximum = 3600;
-        _idleNum.Increment = 5;
-        _idleNum.Value = 60;
+        _idleHours = CreateTimeSpinner(new Point(238, 12), 99, 0);
+        _idleMinutes = CreateTimeSpinner(new Point(298, 12), 59, 1);
+        _idleSeconds = CreateTimeSpinner(new Point(358, 12), 59, 0);
+
+        Label idleColon1 = new Label();
+        idleColon1.Text = ":";
+        idleColon1.Location = new Point(291, 15);
+        idleColon1.AutoSize = true;
+
+        Label idleColon2 = new Label();
+        idleColon2.Text = ":";
+        idleColon2.Location = new Point(351, 15);
+        idleColon2.AutoSize = true;
 
         Label enforceLabel = new Label();
         enforceLabel.Text = "Re-check interval (seconds):";
@@ -652,7 +660,11 @@ internal sealed class MainForm : Form
         _logBox.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom;
 
         Controls.Add(idleLabel);
-        Controls.Add(_idleNum);
+        Controls.Add(_idleHours);
+        Controls.Add(idleColon1);
+        Controls.Add(_idleMinutes);
+        Controls.Add(idleColon2);
+        Controls.Add(_idleSeconds);
         Controls.Add(enforceLabel);
         Controls.Add(_enforceNum);
         Controls.Add(_trayCheck);
@@ -767,15 +779,43 @@ internal sealed class MainForm : Form
         }
         else
         {
-            _enforcer.Start((double)_idleNum.Value, (double)_enforceNum.Value, _lockedOnlyCheck.Checked);
+            double idleSeconds = GetIdleSeconds();
+            if (idleSeconds < 1.0)
+            {
+                MessageBox.Show(this,
+                    "Please set the idle time to at least 1 second.",
+                    "Display Sleep Enforcer",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            _enforcer.Start(idleSeconds, (double)_enforceNum.Value, _lockedOnlyCheck.Checked);
             SetUiRunning(true);
         }
+    }
+
+    private double GetIdleSeconds()
+    {
+        return (double)(_idleHours.Value * 3600 + _idleMinutes.Value * 60 + _idleSeconds.Value);
+    }
+
+    private static NumericUpDown CreateTimeSpinner(Point location, int maximum, int value)
+    {
+        NumericUpDown spinner = new NumericUpDown();
+        spinner.Location = location;
+        spinner.Size = new Size(48, 23);
+        spinner.Minimum = 0;
+        spinner.Maximum = maximum;
+        spinner.Value = value;
+        return spinner;
     }
 
     private void SetUiRunning(bool running)
     {
         _startButton.Text = running ? "Stop" : "Start";
-        _idleNum.Enabled = !running;
+        _idleHours.Enabled = !running;
+        _idleMinutes.Enabled = !running;
+        _idleSeconds.Enabled = !running;
         _enforceNum.Enabled = !running;
         _lockedOnlyCheck.Enabled = !running;
         if (!running)

@@ -72,7 +72,8 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 [Tasks]
 ; Checked by default (opt-out): the user can untick this to skip sign-in startup.
 Name: "startup"; Description: "Start {#AppName} automatically when I sign in"; GroupDescription: "Startup:"
-Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
+; Opt-in: unchecked by default.
+Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
 Source: "..\compiled\{#AppExeName}"; DestDir: "{app}"; Flags: ignoreversion{#FileSignFlag}
