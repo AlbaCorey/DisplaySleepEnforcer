@@ -2,7 +2,7 @@
 
 **Status:** Pre-release (v0.3.0)
 
-Display Sleep Enforcer is a small Windows tray application that forces displays to turn off after an idle timeout. Two things set it apart: it enforces display sleep **even while the PC is locked**, when applications (media players, browsers, etc.) are holding active display power requests; and it can **lock the PC the moment the display turns off** — a safeguard Windows does not offer natively, and one that is unusual in other software.
+Display Sleep Enforcer is a small Windows tray application that forces displays to turn off after an idle timeout. Two things set it apart: it enforces display sleep **even while the PC is locked**, when applications (media players, browsers, etc.) are holding active display power requests; and it can **lock the PC the moment the display turns off** — a safeguard Windows does not offer natively, and one that is not typical of other software.
 
 ## Why this exists
 
@@ -16,7 +16,7 @@ DSE works around this by temporarily overriding the global Windows policy `"Allo
 - **Idle enforcement mode**: turns displays off when the system has been idle for N seconds while unlocked.
 - **Displays power requests are overridden while locked** — handles media players, browsers, etc.
 - **Re-asserts** the policy periodically while locked to prevent other software from undoing it.
-- **Lock the PC when the display turns off** — a safeguard Windows does not provide natively and that is rare in other software. It works independently of Start/Stop for as long as DSE is running, and reacts to any cause of display-off (the power plan, idle enforcement, or a manual "Force off now").
+- **Lock the PC when the display turns off** — a safeguard Windows does not provide natively and that is not typical of other software. It works independently of Start/Stop for as long as DSE is running, and reacts to any cause of display-off (the power plan, idle enforcement, or a manual "Force off now").
 - **Crash recovery** — if DSE is killed before it can undo its power-plan edits, the original values are restored on the next launch.
 - **Single instance** — launching a second copy tells you DSE is already running instead of disturbing the running one.
 - **Tray minimization** (optional).
