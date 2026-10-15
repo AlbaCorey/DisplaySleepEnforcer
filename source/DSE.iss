@@ -23,7 +23,7 @@
 ; ---------------------------------------------------------------------------
 
 #define AppName      "Display Sleep Enforcer"
-#define AppVersion   "0.4.0"
+#define AppVersion   "0.5.0"
 #define AppPublisher "DSE Project"
 #define AppExeName   "DisplaySleepEnforcer.exe"
 
@@ -85,6 +85,43 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Tasks: deskto
 [Registry]
 ; Sign-in startup is a per-user HKCU Run value (matches the app's own toggle).
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "DisplaySleepEnforcer"; ValueData: """{app}\{#AppExeName}"""; Tasks: startup; Flags: uninsdeletevalue
+; Initial appearance (0 = follow system, 1 = light, 2 = dark). Written once at
+; install; the app manages it afterwards. Not removed on uninstall.
+Root: HKCU; Subkey: "Software\DisplaySleepEnforcer\Settings"; ValueType: dword; ValueName: "Theme"; ValueData: "0"; Check: ThemeIsSystem
+Root: HKCU; Subkey: "Software\DisplaySleepEnforcer\Settings"; ValueType: dword; ValueName: "Theme"; ValueData: "1"; Check: ThemeIsLight
+Root: HKCU; Subkey: "Software\DisplaySleepEnforcer\Settings"; ValueType: dword; ValueName: "Theme"; ValueData: "2"; Check: ThemeIsDark
 
 [Run]
 Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(AppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+
+[Code]
+var
+  ThemePage: TInputOptionWizardPage;
+
+procedure InitializeWizard();
+begin
+  ThemePage := CreateInputOptionPage(wpSelectTasks,
+    'Appearance',
+    'Choose how {#AppName} looks.',
+    'Select a theme. You can change this later from the tray icon menu.',
+    True, False);
+  ThemePage.Add('Follow the Windows system theme');
+  ThemePage.Add('Light');
+  ThemePage.Add('Dark');
+  ThemePage.Values[0] := True;
+end;
+
+function ThemeIsSystem(): Boolean;
+begin
+  Result := (ThemePage = nil) or ThemePage.Values[0];
+end;
+
+function ThemeIsLight(): Boolean;
+begin
+  Result := (ThemePage <> nil) and ThemePage.Values[1];
+end;
+
+function ThemeIsDark(): Boolean;
+begin
+  Result := (ThemePage <> nil) and ThemePage.Values[2];
+end;

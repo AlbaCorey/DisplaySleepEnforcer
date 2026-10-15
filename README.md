@@ -1,6 +1,6 @@
 # Display Sleep Enforcer
 
-**Status:** Pre-release (v0.4.0)
+**Status:** Pre-release (v0.5.0)
 
 Display Sleep Enforcer is a small Windows tray application that forces displays to turn off after an idle timeout. Two things set it apart: it enforces display sleep **even while the PC is locked**, when applications (media players, browsers, etc.) are holding active display power requests; and it can **lock the PC the moment the display turns off** — a safeguard Windows does not offer natively, and one that is not typical of other software.
 
@@ -26,6 +26,8 @@ DSE works around this by temporarily overriding the global Windows policy `"Allo
 - **Crash recovery** — if DSE is killed before it can undo its power-plan edits, the original values are restored on the next launch.
 - **Single instance** — launching a second copy tells you DSE is already running instead of disturbing the running one.
 - **Tray minimization** (optional).
+- **Remembers your settings** — timers, checkboxes, and appearance are saved and restored on the next launch.
+- **Light/dark appearance** — follows the Windows theme by default; switch to Light or Dark any time from the tray menu's **Appearance** submenu. The installer also lets you pick the initial theme.
 - **Per-user installer** or per-machine installer (choice on first wizard page).
 - **Starts with Windows by default** — opt out in the installer or toggle "Start automatically when I sign in" in the app.
 
@@ -40,7 +42,7 @@ DSE works around this by temporarily overriding the global Windows policy `"Allo
 
 1. Download the latest `DSE-Setup.exe` from [Releases](https://github.com/AlbaCorey/DisplaySleepEnforcer/releases).
 2. Run it. The installer is **unsigned** — SmartScreen may show "unknown publisher." Select *More info → Run anyway* to continue.
-3. Choose per-user or per-machine, and finish the installation.
+3. Choose per-user or per-machine, pick the appearance (follow system, light, or dark), and finish the installation.
 
 You can also run the portable `DisplaySleepEnforcer.exe` directly (it's included in the release assets as well as in `compiled/` when built from source).
 
@@ -58,13 +60,14 @@ To turn the displays off immediately at any time, use **"Force displays off now"
 
 To also have the PC lock whenever the display goes to sleep — for example when the normal power plan turns the display off — tick **"Lock the PC when the display turns off."** Windows has no built-in option to lock on display-off, so this fills that gap. The toggle works independently of Start/Stop: it is active for as long as DSE is running.
 
-The tray icon shows "Display Sleep Enforcer." Right-click to show the window, start/stop, force the displays off, or exit.
+The tray icon shows "Display Sleep Enforcer." Right-click to show the window, start/stop, force the displays off, choose the appearance (follow system, light, or dark), or exit.
 
 ## Notes & caveats
 
 - **Pre-release**: lightly tested on one machine (RDP, sleep/hibernate not extensively verified).
 - **Global policy**: while locked, DSE writes `ALLOWDISPLAY=0` for the active power scheme (AC/DC). This is a system-wide setting change — it's necessary to ignore all display power requests. DSE captures and restores the original values on unlock/stop/exit.
 - **Crash recovery**: before editing the power plan, DSE saves the original values to `HKCU\Software\DisplaySleepEnforcer\Recovery`. If the process is hard-killed, the next launch restores them and logs what it undid, then clears the key. A clean stop clears it immediately.
+- **Saved settings**: your timer values, checkboxes, and appearance are stored in `HKCU\Software\DisplaySleepEnforcer\Settings` and restored on the next launch. Enforcement itself always starts stopped; only the settings are remembered.
 - **Unsigned binary**: no Authenticode signature; expect SmartScreen warnings.
 - **Not admin required**: powercfg writes for the active scheme succeed for a standard user via the Power service.
 
@@ -102,7 +105,7 @@ The code lives in `source/DisplaySleepEnforcer.cs`; `compiled/` is build output 
 
 Bug reports and feature requests are welcome on the [issue tracker](https://github.com/AlbaCorey/DisplaySleepEnforcer/issues). When reporting a display-sleep problem, please include:
 
-- The DSE version (the release you installed, e.g. `0.4.0`).
+- The DSE version (the release you installed, e.g. `0.5.0`).
 - Your Windows version and build (`winver`).
 - Which modes you enabled (locked, unlocked, or both) and the timeout(s) you set.
 - Whether it happens with a specific app (media players, remote desktop, and so on).
