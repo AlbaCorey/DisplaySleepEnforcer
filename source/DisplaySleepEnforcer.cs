@@ -17,19 +17,22 @@
 
 using System;
 using System.Drawing;
-using Microsoft.Win32;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Windows.Forms;
+using Microsoft.Win32;
 
 internal static class Native
 {
     public const uint WM_SYSCOMMAND = 0x0112;
+    public const uint SMTO_ABORTIFHUNG = 0x0002;
+    private const uint DESKTOP_READOBJECTS = 0x0001;
+    private const int UOI_NAME = 2;
+
     public static readonly IntPtr HWND_BROADCAST = new IntPtr(0xFFFF);
     public static readonly IntPtr SC_MONITORPOWER = new IntPtr(0xF170);
     public static readonly IntPtr MONITOR_OFF = new IntPtr(2);
-    public const uint SMTO_ABORTIFHUNG = 0x0002;
 
     [StructLayout(LayoutKind.Sequential)]
     public struct LASTINPUTINFO
@@ -39,12 +42,22 @@ internal static class Native
     }
 
     [DllImport("user32.dll", SetLastError = true)]
-    public static extern IntPtr SendMessageTimeout(
+    private static extern IntPtr SendMessageTimeout(
         IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam,
         uint fuFlags, uint uTimeout, out IntPtr lpdwResult);
 
     [DllImport("user32.dll")]
-    public static extern bool GetLastInputInfo(ref LASTINPUTINFO plii);
+    private static extern bool GetLastInputInfo(ref LASTINPUTINFO plii);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern IntPtr OpenInputDesktop(uint dwFlags, bool fInherit, uint dwDesiredAccess);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool CloseDesktop(IntPtr hDesktop);
+
+    [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    private static extern bool GetUserObjectInformation(
+        IntPtr hObj, int nIndex, StringBuilder pvInfo, int nLength, out int lpnLengthNeeded);
 
     public static void TurnOffMonitors()
     {
@@ -93,19 +106,6 @@ internal static class Native
             CloseDesktop(desktop);
         }
     }
-
-    private const uint DESKTOP_READOBJECTS = 0x0001;
-    private const int UOI_NAME = 2;
-
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern IntPtr OpenInputDesktop(uint dwFlags, bool fInherit, uint dwDesiredAccess);
-
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern bool CloseDesktop(IntPtr hDesktop);
-
-    [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
-    private static extern bool GetUserObjectInformation(
-        IntPtr hObj, int nIndex, StringBuilder pvInfo, int nLength, out int lpnLengthNeeded);
 }
 
 internal static class PowerSettings
@@ -551,6 +551,9 @@ internal sealed class Enforcer
 
 internal sealed class MainForm : Form
 {
+    private const string RunKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
+    private const string RunValueName = "DisplaySleepEnforcer";
+
     private readonly NumericUpDown _idleHours;
     private readonly NumericUpDown _idleMinutes;
     private readonly NumericUpDown _idleSeconds;
@@ -573,7 +576,7 @@ internal sealed class MainForm : Form
         FormBorderStyle = FormBorderStyle.FixedSingle;
         MaximizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(420, 405);
+        ClientSize = new Size(420, 420);
         Font = new Font("Segoe UI", 9F);
 
         _appIcon = LoadAppIcon();
@@ -584,30 +587,30 @@ internal sealed class MainForm : Form
 
         Label idleLabel = new Label();
         idleLabel.Text = "Turn displays off after (hh:mm:ss) idle:";
-        idleLabel.Location = new Point(12, 15);
+        idleLabel.Location = new Point(12, 16);
         idleLabel.AutoSize = true;
 
-        _idleHours = CreateTimeSpinner(new Point(238, 12), 99, 0);
-        _idleMinutes = CreateTimeSpinner(new Point(298, 12), 59, 1);
-        _idleSeconds = CreateTimeSpinner(new Point(358, 12), 59, 0);
+        _idleHours = CreateTimeSpinner(new Point(244, 12), 99, 0);
+        _idleMinutes = CreateTimeSpinner(new Point(304, 12), 59, 1);
+        _idleSeconds = CreateTimeSpinner(new Point(364, 12), 59, 0);
 
         Label idleColon1 = new Label();
         idleColon1.Text = ":";
-        idleColon1.Location = new Point(291, 15);
+        idleColon1.Location = new Point(291, 16);
         idleColon1.AutoSize = true;
 
         Label idleColon2 = new Label();
         idleColon2.Text = ":";
-        idleColon2.Location = new Point(351, 15);
+        idleColon2.Location = new Point(351, 16);
         idleColon2.AutoSize = true;
 
         Label enforceLabel = new Label();
         enforceLabel.Text = "Re-check interval (seconds):";
-        enforceLabel.Location = new Point(12, 45);
+        enforceLabel.Location = new Point(12, 52);
         enforceLabel.AutoSize = true;
 
         _enforceNum = new NumericUpDown();
-        _enforceNum.Location = new Point(290, 42);
+        _enforceNum.Location = new Point(298, 48);
         _enforceNum.Size = new Size(110, 23);
         _enforceNum.DecimalPlaces = 1;
         _enforceNum.Minimum = 0.2m;
@@ -617,42 +620,42 @@ internal sealed class MainForm : Form
 
         _trayCheck = new CheckBox();
         _trayCheck.Text = "Minimize to tray";
-        _trayCheck.Location = new Point(12, 75);
+        _trayCheck.Location = new Point(12, 88);
         _trayCheck.AutoSize = true;
         _trayCheck.Checked = true;
 
         _lockedOnlyCheck = new CheckBox();
         _lockedOnlyCheck.Text = "Only enforce display sleep while the PC is locked";
-        _lockedOnlyCheck.Location = new Point(12, 98);
+        _lockedOnlyCheck.Location = new Point(12, 112);
         _lockedOnlyCheck.AutoSize = true;
 
         _startupCheck = new CheckBox();
         _startupCheck.Text = "Start automatically when I sign in";
-        _startupCheck.Location = new Point(12, 121);
+        _startupCheck.Location = new Point(12, 136);
         _startupCheck.AutoSize = true;
         _startupCheck.Checked = IsRunAtStartupEnabled();
         _startupCheck.CheckedChanged += StartupCheckChanged;
 
         _startButton = new Button();
         _startButton.Text = "Start";
-        _startButton.Location = new Point(12, 148);
-        _startButton.Size = new Size(120, 30);
+        _startButton.Location = new Point(12, 168);
+        _startButton.Size = new Size(120, 32);
         _startButton.Click += StartButtonClick;
 
         _forceButton = new Button();
         _forceButton.Text = "Force off now";
-        _forceButton.Location = new Point(140, 148);
-        _forceButton.Size = new Size(120, 30);
+        _forceButton.Location = new Point(140, 168);
+        _forceButton.Size = new Size(120, 32);
         _forceButton.Click += ForceButtonClick;
 
         _statusLabel = new Label();
         _statusLabel.Text = "Stopped.";
-        _statusLabel.Location = new Point(12, 188);
+        _statusLabel.Location = new Point(12, 214);
         _statusLabel.AutoSize = true;
 
         _logBox = new TextBox();
-        _logBox.Location = new Point(12, 213);
-        _logBox.Size = new Size(388, 175);
+        _logBox.Location = new Point(12, 240);
+        _logBox.Size = new Size(396, 168);
         _logBox.Multiline = true;
         _logBox.ReadOnly = true;
         _logBox.ScrollBars = ScrollBars.Vertical;
@@ -703,9 +706,6 @@ internal sealed class MainForm : Form
         Native.TurnOffMonitors();
         AppendLog("Display-off command sent.");
     }
-
-    private const string RunKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
-    private const string RunValueName = "DisplaySleepEnforcer";
 
     private static bool IsRunAtStartupEnabled()
     {
@@ -803,7 +803,7 @@ internal sealed class MainForm : Form
     {
         NumericUpDown spinner = new NumericUpDown();
         spinner.Location = location;
-        spinner.Size = new Size(48, 23);
+        spinner.Size = new Size(44, 23);
         spinner.Minimum = 0;
         spinner.Maximum = maximum;
         spinner.Value = value;
