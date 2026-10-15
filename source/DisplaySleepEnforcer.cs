@@ -26,6 +26,7 @@ using Microsoft.Win32;
 internal static class Native
 {
     public const uint WM_SYSCOMMAND = 0x0112;
+    public const uint WM_SETTINGCHANGE = 0x001A;
     public const uint WM_POWERBROADCAST = 0x0218;
     public const uint PBT_POWERSETTINGCHANGE = 0x8013;
     public const uint SMTO_ABORTIFHUNG = 0x0002;
@@ -81,6 +82,24 @@ internal static class Native
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool LockWorkStation();
+
+    [DllImport("dwmapi.dll", PreserveSig = true)]
+    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
+
+    public static void SetImmersiveDarkMode(IntPtr hwnd, bool enabled)
+    {
+        int value = enabled ? 1 : 0;
+        try
+        {
+            if (DwmSetWindowAttribute(hwnd, 20, ref value, sizeof(int)) != 0)
+            {
+                DwmSetWindowAttribute(hwnd, 19, ref value, sizeof(int));
+            }
+        }
+        catch
+        {
+        }
+    }
 
     public static void TurnOffMonitors()
     {
@@ -514,6 +533,272 @@ internal static class PowerRecovery
     }
 }
 
+internal static class Theme
+{
+    public const int SystemMode = 0;
+    public const int LightMode = 1;
+    public const int DarkMode = 2;
+
+    public static readonly Color DarkBackground = Color.FromArgb(32, 32, 32);
+    public static readonly Color DarkSurface = Color.FromArgb(45, 45, 48);
+    public static readonly Color DarkText = Color.FromArgb(235, 235, 235);
+    public static readonly Color DarkBorder = Color.FromArgb(82, 82, 82);
+    public static readonly Color DarkButton = Color.FromArgb(51, 51, 55);
+    public static readonly Color DarkHighlight = Color.FromArgb(62, 62, 66);
+
+    public static bool IsSystemDark()
+    {
+        try
+        {
+            using (RegistryKey key = Registry.CurrentUser.OpenSubKey(
+                @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize", false))
+            {
+                if (key != null)
+                {
+                    object value = key.GetValue("AppsUseLightTheme");
+                    if (value != null)
+                    {
+                        return Convert.ToInt32(value) == 0;
+                    }
+                }
+            }
+        }
+        catch
+        {
+        }
+
+        return false;
+    }
+
+    public static bool Resolve(int mode)
+    {
+        if (mode == DarkMode)
+        {
+            return true;
+        }
+
+        if (mode == LightMode)
+        {
+            return false;
+        }
+
+        return IsSystemDark();
+    }
+
+    public static void Apply(Form form, bool dark)
+    {
+        form.BackColor = dark ? DarkBackground : SystemColors.Control;
+        form.ForeColor = dark ? DarkText : SystemColors.ControlText;
+
+        foreach (Control control in form.Controls)
+        {
+            ApplyToControl(control, dark);
+        }
+    }
+
+    private static void ApplyToControl(Control control, bool dark)
+    {
+        Button button = control as Button;
+        if (button != null)
+        {
+            button.FlatStyle = dark ? FlatStyle.Flat : FlatStyle.Standard;
+            button.UseVisualStyleBackColor = !dark;
+            button.BackColor = dark ? DarkButton : SystemColors.Control;
+            button.ForeColor = dark ? DarkText : SystemColors.ControlText;
+            button.FlatAppearance.BorderColor = dark ? DarkBorder : SystemColors.Control;
+            button.FlatAppearance.BorderSize = dark ? 1 : 0;
+            button.FlatAppearance.MouseOverBackColor = dark ? DarkHighlight : SystemColors.Control;
+            button.FlatAppearance.MouseDownBackColor = dark ? DarkBorder : SystemColors.Control;
+        }
+        else if (control is TextBox)
+        {
+            control.BackColor = dark ? DarkSurface : Color.White;
+            control.ForeColor = dark ? DarkText : SystemColors.WindowText;
+        }
+        else if (control is NumericUpDown)
+        {
+            control.BackColor = dark ? DarkSurface : SystemColors.Window;
+            control.ForeColor = dark ? DarkText : SystemColors.WindowText;
+        }
+        else if (control is Label)
+        {
+            control.BackColor = Color.Transparent;
+            control.ForeColor = dark ? DarkText : SystemColors.ControlText;
+        }
+        else if (control is CheckBox)
+        {
+            control.BackColor = dark ? DarkBackground : SystemColors.Control;
+            control.ForeColor = dark ? DarkText : SystemColors.ControlText;
+        }
+        else
+        {
+            control.BackColor = dark ? DarkBackground : SystemColors.Control;
+            control.ForeColor = dark ? DarkText : SystemColors.ControlText;
+        }
+
+        foreach (Control child in control.Controls)
+        {
+            ApplyToControl(child, dark);
+        }
+    }
+}
+
+internal sealed class DarkColorTable : ProfessionalColorTable
+{
+    public override Color ToolStripDropDownBackground { get { return Theme.DarkSurface; } }
+    public override Color MenuItemSelected { get { return Theme.DarkHighlight; } }
+    public override Color MenuItemSelectedGradientBegin { get { return Theme.DarkHighlight; } }
+    public override Color MenuItemSelectedGradientEnd { get { return Theme.DarkHighlight; } }
+    public override Color MenuItemBorder { get { return Theme.DarkHighlight; } }
+    public override Color MenuBorder { get { return Theme.DarkBorder; } }
+    public override Color ImageMarginGradientBegin { get { return Theme.DarkSurface; } }
+    public override Color ImageMarginGradientMiddle { get { return Theme.DarkSurface; } }
+    public override Color ImageMarginGradientEnd { get { return Theme.DarkSurface; } }
+    public override Color SeparatorDark { get { return Theme.DarkBorder; } }
+    public override Color SeparatorLight { get { return Theme.DarkSurface; } }
+}
+
+internal sealed class DarkMenuRenderer : ToolStripProfessionalRenderer
+{
+    public DarkMenuRenderer()
+        : base(new DarkColorTable())
+    {
+    }
+
+    protected override void OnRenderItemCheck(ToolStripItemImageRenderEventArgs e)
+    {
+        Rectangle bounds = e.ImageRectangle;
+        using (Pen pen = new Pen(Theme.DarkText, 2f))
+        {
+            pen.StartCap = System.Drawing.Drawing2D.LineCap.Round;
+            pen.EndCap = System.Drawing.Drawing2D.LineCap.Round;
+            Point[] points = new Point[]
+            {
+                new Point(bounds.Left + 2, bounds.Top + bounds.Height / 2),
+                new Point(bounds.Left + bounds.Width / 2, bounds.Bottom - 4),
+                new Point(bounds.Right - 2, bounds.Top + 3)
+            };
+            e.Graphics.DrawLines(pen, points);
+        }
+    }
+}
+
+internal sealed class AppSettings
+{
+    public bool UnlockedEnabled;
+    public int UnlockedSeconds = 900;
+    public bool LockedEnabled = true;
+    public int LockedSeconds = 60;
+    public int EnforceMs = 2000;
+    public bool MinimizeToTray = true;
+    public bool LockOnSleep;
+    public int Theme;
+}
+
+internal static class SettingsStore
+{
+    private const string SubKeyPath = @"Software\DisplaySleepEnforcer\Settings";
+    private const string UnlockedEnabledValue = "UnlockedEnabled";
+    private const string UnlockedSecondsValue = "UnlockedSeconds";
+    private const string LockedEnabledValue = "LockedEnabled";
+    private const string LockedSecondsValue = "LockedSeconds";
+    private const string EnforceMsValue = "EnforceMs";
+    private const string MinimizeToTrayValue = "MinimizeToTray";
+    private const string LockOnSleepValue = "LockOnSleep";
+    private const string ThemeValue = "Theme";
+
+    public static AppSettings Load()
+    {
+        AppSettings settings = new AppSettings();
+        try
+        {
+            using (RegistryKey key = Registry.CurrentUser.OpenSubKey(SubKeyPath, false))
+            {
+                if (key == null)
+                {
+                    return settings;
+                }
+
+                settings.UnlockedEnabled = ReadBool(key, UnlockedEnabledValue, settings.UnlockedEnabled);
+                settings.UnlockedSeconds = ReadInt(key, UnlockedSecondsValue, settings.UnlockedSeconds);
+                settings.LockedEnabled = ReadBool(key, LockedEnabledValue, settings.LockedEnabled);
+                settings.LockedSeconds = ReadInt(key, LockedSecondsValue, settings.LockedSeconds);
+                settings.EnforceMs = ReadInt(key, EnforceMsValue, settings.EnforceMs);
+                settings.MinimizeToTray = ReadBool(key, MinimizeToTrayValue, settings.MinimizeToTray);
+                settings.LockOnSleep = ReadBool(key, LockOnSleepValue, settings.LockOnSleep);
+                settings.Theme = ReadInt(key, ThemeValue, settings.Theme);
+            }
+        }
+        catch
+        {
+        }
+
+        return settings;
+    }
+
+    public static void Save(AppSettings settings)
+    {
+        try
+        {
+            using (RegistryKey key = Registry.CurrentUser.CreateSubKey(SubKeyPath))
+            {
+                if (key == null)
+                {
+                    return;
+                }
+
+                key.SetValue(UnlockedEnabledValue, settings.UnlockedEnabled ? 1 : 0, RegistryValueKind.DWord);
+                key.SetValue(UnlockedSecondsValue, settings.UnlockedSeconds, RegistryValueKind.DWord);
+                key.SetValue(LockedEnabledValue, settings.LockedEnabled ? 1 : 0, RegistryValueKind.DWord);
+                key.SetValue(LockedSecondsValue, settings.LockedSeconds, RegistryValueKind.DWord);
+                key.SetValue(EnforceMsValue, settings.EnforceMs, RegistryValueKind.DWord);
+                key.SetValue(MinimizeToTrayValue, settings.MinimizeToTray ? 1 : 0, RegistryValueKind.DWord);
+                key.SetValue(LockOnSleepValue, settings.LockOnSleep ? 1 : 0, RegistryValueKind.DWord);
+                key.SetValue(ThemeValue, settings.Theme, RegistryValueKind.DWord);
+            }
+        }
+        catch
+        {
+        }
+    }
+
+    private static bool ReadBool(RegistryKey key, string name, bool fallback)
+    {
+        object value = key.GetValue(name);
+        if (value == null)
+        {
+            return fallback;
+        }
+
+        try
+        {
+            return Convert.ToInt32(value) != 0;
+        }
+        catch
+        {
+            return fallback;
+        }
+    }
+
+    private static int ReadInt(RegistryKey key, string name, int fallback)
+    {
+        object value = key.GetValue(name);
+        if (value == null)
+        {
+            return fallback;
+        }
+
+        try
+        {
+            return Convert.ToInt32(value);
+        }
+        catch
+        {
+            return fallback;
+        }
+    }
+}
+
 internal sealed class LockWatcher
 {
     // The input-desktop poll used to be the only signal, but it can report a
@@ -801,6 +1086,13 @@ internal sealed class MainForm : Form
     private readonly Enforcer _enforcer = new Enforcer();
     private readonly Icon _appIcon;
     private bool _closing;
+    private bool _loadingSettings;
+    private int _themeMode = Theme.SystemMode;
+    private bool _dark;
+    private readonly DarkMenuRenderer _darkMenuRenderer = new DarkMenuRenderer();
+    private ToolStripMenuItem _appearanceSystem;
+    private ToolStripMenuItem _appearanceLight;
+    private ToolStripMenuItem _appearanceDark;
     private IntPtr _displayNotify = IntPtr.Zero;
 
     public MainForm()
@@ -957,11 +1249,29 @@ internal sealed class MainForm : Form
         menu.Items.Add("Start / Stop", null, delegate { ToggleEnforcement(); });
         menu.Items.Add("Force displays off now", null, delegate { ForceDisplayOff(); });
         menu.Items.Add(new ToolStripSeparator());
+
+        _appearanceSystem = new ToolStripMenuItem("Follow system theme");
+        _appearanceSystem.Click += delegate { SetThemeMode(Theme.SystemMode); };
+        _appearanceLight = new ToolStripMenuItem("Light");
+        _appearanceLight.Click += delegate { SetThemeMode(Theme.LightMode); };
+        _appearanceDark = new ToolStripMenuItem("Dark");
+        _appearanceDark.Click += delegate { SetThemeMode(Theme.DarkMode); };
+
+        ToolStripMenuItem appearance = new ToolStripMenuItem("Appearance");
+        appearance.DropDownItems.Add(_appearanceSystem);
+        appearance.DropDownItems.Add(_appearanceLight);
+        appearance.DropDownItems.Add(_appearanceDark);
+        menu.Items.Add(appearance);
+
+        menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Exit", null, delegate { Close(); });
         _tray.ContextMenuStrip = menu;
         _tray.DoubleClick += delegate { RestoreFromTray(); };
 
+        WireSettingsPersistence();
+
         RunCrashRecovery();
+        ApplySavedSettings();
 
         Resize += FormResize;
         FormClosing += FormClosingHandler;
@@ -983,6 +1293,181 @@ internal sealed class MainForm : Form
         {
             AppendLog("A previous run left power settings changed but they could not be restored.");
         }
+    }
+
+    private void WireSettingsPersistence()
+    {
+        _unlockedCheck.CheckedChanged += SettingsChanged;
+        _lockedCheck.CheckedChanged += SettingsChanged;
+        _trayCheck.CheckedChanged += SettingsChanged;
+        _lockOnSleepCheck.CheckedChanged += SettingsChanged;
+        _enforceNum.ValueChanged += SettingsChanged;
+        _unlockedHours.ValueChanged += SettingsChanged;
+        _unlockedMinutes.ValueChanged += SettingsChanged;
+        _unlockedSeconds.ValueChanged += SettingsChanged;
+        _lockedHours.ValueChanged += SettingsChanged;
+        _lockedMinutes.ValueChanged += SettingsChanged;
+        _lockedSeconds.ValueChanged += SettingsChanged;
+    }
+
+    private void ApplySavedSettings()
+    {
+        AppSettings settings = SettingsStore.Load();
+
+        _themeMode = NormalizeTheme(settings.Theme);
+
+        _loadingSettings = true;
+        try
+        {
+            _unlockedCheck.Checked = settings.UnlockedEnabled;
+            SetTimeSpinners(_unlockedHours, _unlockedMinutes, _unlockedSeconds, settings.UnlockedSeconds);
+            _lockedCheck.Checked = settings.LockedEnabled;
+            SetTimeSpinners(_lockedHours, _lockedMinutes, _lockedSeconds, settings.LockedSeconds);
+            _enforceNum.Value = ClampEnforce(settings.EnforceMs);
+            _trayCheck.Checked = settings.MinimizeToTray;
+            _lockOnSleepCheck.Checked = settings.LockOnSleep;
+        }
+        finally
+        {
+            _loadingSettings = false;
+        }
+
+        ApplyTheme();
+    }
+
+    private static int NormalizeTheme(int mode)
+    {
+        if (mode == Theme.LightMode || mode == Theme.DarkMode)
+        {
+            return mode;
+        }
+
+        return Theme.SystemMode;
+    }
+
+    private void SetThemeMode(int mode)
+    {
+        _themeMode = NormalizeTheme(mode);
+        ApplyTheme();
+        SettingsChanged(this, EventArgs.Empty);
+    }
+
+    private void ApplyTheme()
+    {
+        _dark = Theme.Resolve(_themeMode);
+        Theme.Apply(this, _dark);
+        ApplyTrayTheme(_dark);
+        ApplyTitleBarTheme(_dark);
+        UpdateThemeMenuChecks();
+    }
+
+    private void ApplyTitleBarTheme(bool dark)
+    {
+        if (IsHandleCreated)
+        {
+            Native.SetImmersiveDarkMode(Handle, dark);
+        }
+    }
+
+    private void UpdateThemeMenuChecks()
+    {
+        if (_appearanceSystem != null)
+        {
+            _appearanceSystem.Checked = _themeMode == Theme.SystemMode;
+        }
+        if (_appearanceLight != null)
+        {
+            _appearanceLight.Checked = _themeMode == Theme.LightMode;
+        }
+        if (_appearanceDark != null)
+        {
+            _appearanceDark.Checked = _themeMode == Theme.DarkMode;
+        }
+    }
+
+    private void ApplyTrayTheme(bool dark)
+    {
+        ContextMenuStrip menu = _tray.ContextMenuStrip;
+        if (menu == null)
+        {
+            return;
+        }
+
+        menu.Renderer = dark ? (ToolStripRenderer)_darkMenuRenderer : null;
+
+        foreach (ToolStripItem item in menu.Items)
+        {
+            ApplyMenuItemTheme(item, dark);
+        }
+    }
+
+    private static void ApplyMenuItemTheme(ToolStripItem item, bool dark)
+    {
+        item.ForeColor = dark ? Theme.DarkText : SystemColors.ControlText;
+
+        ToolStripMenuItem menuItem = item as ToolStripMenuItem;
+        if (menuItem != null)
+        {
+            foreach (ToolStripItem child in menuItem.DropDownItems)
+            {
+                ApplyMenuItemTheme(child, dark);
+            }
+        }
+    }
+
+    private void SettingsChanged(object sender, EventArgs e)
+    {
+        if (_loadingSettings)
+        {
+            return;
+        }
+
+        AppSettings settings = new AppSettings();
+        settings.UnlockedEnabled = _unlockedCheck.Checked;
+        settings.UnlockedSeconds = (int)Math.Round(GetUnlockedSeconds());
+        settings.LockedEnabled = _lockedCheck.Checked;
+        settings.LockedSeconds = (int)Math.Round(GetLockedSeconds());
+        settings.EnforceMs = (int)Math.Round((double)_enforceNum.Value * 1000.0);
+        settings.MinimizeToTray = _trayCheck.Checked;
+        settings.LockOnSleep = _lockOnSleepCheck.Checked;
+        settings.Theme = _themeMode;
+
+        SettingsStore.Save(settings);
+    }
+
+    private static decimal ClampEnforce(int milliseconds)
+    {
+        decimal value = (decimal)milliseconds / 1000m;
+        if (value < 0.2m)
+        {
+            value = 0.2m;
+        }
+        if (value > 60m)
+        {
+            value = 60m;
+        }
+        return value;
+    }
+
+    private static void SetTimeSpinners(NumericUpDown hours, NumericUpDown minutes, NumericUpDown seconds, int totalSeconds)
+    {
+        if (totalSeconds < 0)
+        {
+            totalSeconds = 0;
+        }
+
+        int h = totalSeconds / 3600;
+        int m = (totalSeconds % 3600) / 60;
+        int s = totalSeconds % 60;
+
+        if (h > (int)hours.Maximum)
+        {
+            h = (int)hours.Maximum;
+        }
+
+        hours.Value = h;
+        minutes.Value = m;
+        seconds.Value = s;
     }
 
     private void StartButtonClick(object sender, EventArgs e)
@@ -1112,6 +1597,11 @@ internal sealed class MainForm : Form
 
     protected override void WndProc(ref Message m)
     {
+        if (m.Msg == (int)Native.WM_SETTINGCHANGE && _themeMode == Theme.SystemMode)
+        {
+            ApplyTheme();
+        }
+
         if (m.Msg == (int)Native.WM_POWERBROADCAST &&
             m.WParam.ToInt64() == Native.PBT_POWERSETTINGCHANGE)
         {
@@ -1119,6 +1609,12 @@ internal sealed class MainForm : Form
         }
 
         base.WndProc(ref m);
+    }
+
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        ApplyTitleBarTheme(_dark);
     }
 
     private void HandlePowerSettingChange(IntPtr lParam)
