@@ -1,6 +1,6 @@
 # Display Sleep Enforcer
 
-**Status:** Pre-release (v0.2.0)
+**Status:** Pre-release (v0.3.0)
 
 Display Sleep Enforcer is a small Windows tray application that forces displays to turn off after an idle timeout. Its standout feature: it can enforce display sleep **while the PC is locked**, even when applications (media players, browsers, games, etc.) are holding active display power requests.
 
@@ -16,6 +16,9 @@ DSE works around this by temporarily overriding the global Windows policy `"Allo
 - **Idle enforcement mode**: turns displays off when the system has been idle for N seconds while unlocked.
 - **Displays power requests are overridden while locked** — handles browsers, VLC, etc.
 - **Re-asserts** the policy periodically while locked to prevent other software from undoing it.
+- **Lock the PC when the display turns off** — independent of Start/Stop; active for as long as DSE is running, and reacts to any cause of display-off (the power plan, idle enforcement, or a manual "Force off now").
+- **Crash recovery** — if DSE is killed before it can undo its power-plan edits, the original values are restored on the next launch.
+- **Single instance** — launching a second copy tells you DSE is already running instead of disturbing the running one.
 - **Tray minimization** (optional).
 - **Per-user installer** or per-machine installer (choice on first wizard page).
 - **Starts with Windows by default** — opt out in the installer or toggle "Start automatically when I sign in" in the app.
@@ -44,22 +47,27 @@ You can also run the portable `DisplaySleepEnforcer.exe` directly (it's included
 4. Adjust the re-check interval if desired, then press **Start**.
 5. Lock the PC (Win+L), start media, and the screen should turn off after the set timeout.
 
+To also have the PC lock whenever the display goes to sleep — for example when the normal power plan turns the display off — tick **"Lock the PC when the display turns off"**. This toggle works independently of Start/Stop: it is active for as long as DSE is running.
+
 The tray icon shows "Display Sleep Enforcer". Right-click to show the window, start/stop, or exit.
 
 ## Notes & caveats
 
 - **Pre-release**: lightly tested on one machine (multi-monitor, RDP, sleep/hibernate not extensively verified).
 - **Global policy**: while locked, DSE writes `ALLOWDISPLAY=0` for the active power scheme (AC/DC). This is a system-wide setting change — it's necessary to ignore all display power requests. DSE captures and restores the original values on unlock/stop/exit.
-- **Crash recovery is minimal**: if the process is abruptly killed while locked, the modified power policy may persist until DSE is restarted (it will restore on next normal exit, but a hard kill prevents cleanup). This is known and will be improved.
+- **Crash recovery**: before editing the power plan, DSE saves the original values to `HKCU\Software\DisplaySleepEnforcer\Recovery`. If the process is hard-killed, the next launch restores them and logs what it undid, then clears the key. A clean stop clears it immediately.
 - **Unsigned binary**: no Authenticode signature; expect SmartScreen warnings.
 - **Not admin required**: powercfg writes for the active scheme succeed for a standard user via the Power service.
 
 ## How it works
 
 - Detects lock/unlock via `SystemEvents.SessionSwitch` with a debounced desktop-name fallback.
-- While locked: sets the "console lock display off timeout" (`VIDEOCONLOCK`) to the configured idle seconds (so Windows schedules the display-off), and sets `ALLOWDISPLAY=0` ("Allow display required policy" = No) to override display power requests.
+- While locked: sets the "console lock display off timeout" (`VIDEOCONLOCK`) to the configured idle seconds plus a 5-second margin (so Windows schedules the display-off), and sets `ALLOWDISPLAY=0` ("Allow display required policy" = No) to override display power requests.
 - Re-asserts `ALLOWDISPLAY=0` every ~5 seconds while locked in case another application resets it.
 - On unlock/stop: restores both `VIDEOCONLOCK` and `ALLOWDISPLAY` to their original values.
+- The same 5-second margin is applied to idle enforcement, so the display turns off `N + 5` seconds after the last input.
+- **Lock on display off** subscribes the main window to `GUID_CONSOLE_DISPLAY_STATE` power notifications and calls `LockWorkStation()` whenever the console reports the display off — it does not depend on the Start/Stop state.
+- A named mutex enforces a single running instance, so a second copy cannot undo the power-plan changes out from under the live one.
 
 ## Building from source
 
