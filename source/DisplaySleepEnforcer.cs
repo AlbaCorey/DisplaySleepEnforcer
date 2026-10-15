@@ -583,7 +583,7 @@ internal sealed class MainForm : Form
         }
 
         Label idleLabel = new Label();
-        idleLabel.Text = "Turn displays off after (hh:mm:ss):";
+        idleLabel.Text = "Turn displays off after (hh:mm:ss) idle:";
         idleLabel.Location = new Point(12, 15);
         idleLabel.AutoSize = true;
 
