@@ -42,10 +42,11 @@ You can also run the portable `DisplaySleepEnforcer.exe` directly (it's included
 
 1. Launch "Display Sleep Enforcer" (from Start Menu/Desktop, or it starts automatically if sign-in startup is on).
    - Use the **"Start automatically when I sign in"** checkbox to turn sign-in startup on/off at any time.
-2. Set "Turn displays off after:" using the **hh:mm:ss** spinners (default `00:01:00`). This is the timeout for both modes — it is measured from the moment the PC is locked (**locked-only** mode), or from the last input while unlocked (**idle enforcement** mode).
-3. Check **"Only enforce display sleep while the PC is locked."**
+2. Set "Turn displays off after:" using the **hh:mm:ss** spinners (default `00:01:00`). This single timeout drives both modes below.
+3. The **"Only enforce display sleep while the PC is locked"** checkbox is optional — leave it unchecked unless you specifically want that behavior:
+   - **Unchecked (default):** DSE turns the display off once the PC has been idle for the timeout, whether or not it is locked.
+   - **Checked:** DSE turns the display off only after the timeout has elapsed since the PC was locked, leaving normal power-plan behavior in place while unlocked.
 4. Adjust the re-check interval if desired, then press **Start**.
-5. Lock the PC (Win+L), start media, and the screen should turn off after the set timeout.
 
 To also have the PC lock whenever the display goes to sleep — for example when the normal power plan turns the display off — tick **"Lock the PC when the display turns off."** Windows has no built-in option to lock on display-off, so this fills that gap. The toggle works independently of Start/Stop: it is active for as long as DSE is running.
 
@@ -53,7 +54,7 @@ The tray icon shows "Display Sleep Enforcer." Right-click to show the window, st
 
 ## Notes & caveats
 
-- **Pre-release**: lightly tested on one machine (multi-monitor, RDP, sleep/hibernate not extensively verified).
+- **Pre-release**: lightly tested on one machine (RDP, sleep/hibernate not extensively verified).
 - **Global policy**: while locked, DSE writes `ALLOWDISPLAY=0` for the active power scheme (AC/DC). This is a system-wide setting change — it's necessary to ignore all display power requests. DSE captures and restores the original values on unlock/stop/exit.
 - **Crash recovery**: before editing the power plan, DSE saves the original values to `HKCU\Software\DisplaySleepEnforcer\Recovery`. If the process is hard-killed, the next launch restores them and logs what it undid, then clears the key. A clean stop clears it immediately.
 - **Unsigned binary**: no Authenticode signature; expect SmartScreen warnings.
