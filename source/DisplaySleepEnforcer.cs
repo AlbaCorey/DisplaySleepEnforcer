@@ -820,46 +820,46 @@ internal sealed class MainForm : Form
 
         _unlockedCheck = new CheckBox();
         _unlockedCheck.Text = "Enforce when unlocked:";
-        _unlockedCheck.Location = new Point(12, 16);
+        _unlockedCheck.Location = new Point(12, 14);
         _unlockedCheck.AutoSize = true;
         _unlockedCheck.Checked = false;
         _toolTip.SetToolTip(_unlockedCheck,
             "Turn displays off after the PC has been idle this long while it is unlocked.");
 
-        _unlockedHours = CreateTimeSpinner(new Point(190, 12), 99, 0);
-        _unlockedMinutes = CreateTimeSpinner(new Point(250, 12), 59, 15);
-        _unlockedSeconds = CreateTimeSpinner(new Point(310, 12), 59, 0);
+        _unlockedHours = CreateTimeSpinner(new Point(244, 12), 99, 0);
+        _unlockedMinutes = CreateTimeSpinner(new Point(304, 12), 59, 15);
+        _unlockedSeconds = CreateTimeSpinner(new Point(364, 12), 59, 0);
 
         Label unlockedColon1 = new Label();
         unlockedColon1.Text = ":";
-        unlockedColon1.Location = new Point(237, 16);
+        unlockedColon1.Location = new Point(291, 16);
         unlockedColon1.AutoSize = true;
 
         Label unlockedColon2 = new Label();
         unlockedColon2.Text = ":";
-        unlockedColon2.Location = new Point(297, 16);
+        unlockedColon2.Location = new Point(351, 16);
         unlockedColon2.AutoSize = true;
 
         _lockedCheck = new CheckBox();
         _lockedCheck.Text = "Enforce when locked:";
-        _lockedCheck.Location = new Point(12, 52);
+        _lockedCheck.Location = new Point(12, 50);
         _lockedCheck.AutoSize = true;
         _lockedCheck.Checked = true;
         _toolTip.SetToolTip(_lockedCheck,
             "Turn displays off this long after the PC is locked, overriding display power requests.");
 
-        _lockedHours = CreateTimeSpinner(new Point(190, 48), 99, 0);
-        _lockedMinutes = CreateTimeSpinner(new Point(250, 48), 59, 1);
-        _lockedSeconds = CreateTimeSpinner(new Point(310, 48), 59, 0);
+        _lockedHours = CreateTimeSpinner(new Point(244, 48), 99, 0);
+        _lockedMinutes = CreateTimeSpinner(new Point(304, 48), 59, 1);
+        _lockedSeconds = CreateTimeSpinner(new Point(364, 48), 59, 0);
 
         Label lockedColon1 = new Label();
         lockedColon1.Text = ":";
-        lockedColon1.Location = new Point(237, 52);
+        lockedColon1.Location = new Point(291, 52);
         lockedColon1.AutoSize = true;
 
         Label lockedColon2 = new Label();
         lockedColon2.Text = ":";
-        lockedColon2.Location = new Point(297, 52);
+        lockedColon2.Location = new Point(351, 52);
         lockedColon2.AutoSize = true;
 
         Label enforceLabel = new Label();
@@ -901,13 +901,13 @@ internal sealed class MainForm : Form
         _startButton = new Button();
         _startButton.Text = "Start";
         _startButton.Location = new Point(12, 204);
-        _startButton.Size = new Size(120, 32);
+        _startButton.Size = new Size(194, 32);
         _startButton.Click += StartButtonClick;
 
         _forceButton = new Button();
         _forceButton.Text = "Force displays off now";
-        _forceButton.Location = new Point(140, 204);
-        _forceButton.Size = new Size(200, 32);
+        _forceButton.Location = new Point(214, 204);
+        _forceButton.Size = new Size(194, 32);
         _forceButton.Click += ForceButtonClick;
 
         _statusLabel = new Label();
