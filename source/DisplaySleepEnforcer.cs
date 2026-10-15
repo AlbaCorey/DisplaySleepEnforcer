@@ -557,6 +557,7 @@ internal sealed class MainForm : Form
     private readonly Button _forceButton;
     private readonly CheckBox _trayCheck;
     private readonly CheckBox _lockedOnlyCheck;
+    private readonly CheckBox _startupCheck;
     private readonly Label _statusLabel;
     private readonly TextBox _logBox;
     private readonly NotifyIcon _tray;
@@ -570,7 +571,7 @@ internal sealed class MainForm : Form
         FormBorderStyle = FormBorderStyle.FixedSingle;
         MaximizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(420, 385);
+        ClientSize = new Size(420, 405);
         Font = new Font("Segoe UI", 9F);
 
         _appIcon = LoadAppIcon();
@@ -617,25 +618,32 @@ internal sealed class MainForm : Form
         _lockedOnlyCheck.Location = new Point(12, 98);
         _lockedOnlyCheck.AutoSize = true;
 
+        _startupCheck = new CheckBox();
+        _startupCheck.Text = "Start automatically when I sign in";
+        _startupCheck.Location = new Point(12, 121);
+        _startupCheck.AutoSize = true;
+        _startupCheck.Checked = IsRunAtStartupEnabled();
+        _startupCheck.CheckedChanged += StartupCheckChanged;
+
         _startButton = new Button();
         _startButton.Text = "Start";
-        _startButton.Location = new Point(12, 128);
+        _startButton.Location = new Point(12, 148);
         _startButton.Size = new Size(120, 30);
         _startButton.Click += StartButtonClick;
 
         _forceButton = new Button();
         _forceButton.Text = "Force off now";
-        _forceButton.Location = new Point(140, 128);
+        _forceButton.Location = new Point(140, 148);
         _forceButton.Size = new Size(120, 30);
         _forceButton.Click += ForceButtonClick;
 
         _statusLabel = new Label();
         _statusLabel.Text = "Stopped.";
-        _statusLabel.Location = new Point(12, 168);
+        _statusLabel.Location = new Point(12, 188);
         _statusLabel.AutoSize = true;
 
         _logBox = new TextBox();
-        _logBox.Location = new Point(12, 193);
+        _logBox.Location = new Point(12, 213);
         _logBox.Size = new Size(388, 175);
         _logBox.Multiline = true;
         _logBox.ReadOnly = true;
@@ -649,6 +657,7 @@ internal sealed class MainForm : Form
         Controls.Add(_enforceNum);
         Controls.Add(_trayCheck);
         Controls.Add(_lockedOnlyCheck);
+        Controls.Add(_startupCheck);
         Controls.Add(_startButton);
         Controls.Add(_forceButton);
         Controls.Add(_statusLabel);
@@ -681,6 +690,72 @@ internal sealed class MainForm : Form
     {
         Native.TurnOffMonitors();
         AppendLog("Display-off command sent.");
+    }
+
+    private const string RunKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
+    private const string RunValueName = "DisplaySleepEnforcer";
+
+    private static bool IsRunAtStartupEnabled()
+    {
+        try
+        {
+            using (RegistryKey key = Registry.CurrentUser.OpenSubKey(RunKeyPath, false))
+            {
+                return key != null && key.GetValue(RunValueName) != null;
+            }
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool SetRunAtStartup(bool enabled)
+    {
+        try
+        {
+            using (RegistryKey key = Registry.CurrentUser.OpenSubKey(RunKeyPath, true))
+            {
+                if (key == null)
+                {
+                    return false;
+                }
+
+                if (enabled)
+                {
+                    key.SetValue(RunValueName, "\"" + Application.ExecutablePath + "\"", RegistryValueKind.String);
+                }
+                else if (key.GetValue(RunValueName) != null)
+                {
+                    key.DeleteValue(RunValueName, false);
+                }
+
+                return true;
+            }
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private void StartupCheckChanged(object sender, EventArgs e)
+    {
+        bool enabled = _startupCheck.Checked;
+        if (SetRunAtStartup(enabled))
+        {
+            AppendLog(enabled
+                ? "Will start automatically when you sign in."
+                : "Will no longer start automatically when you sign in.");
+            return;
+        }
+
+        AppendLog("Could not update the start-on-sign-in setting.");
+
+        // Revert the checkbox without re-raising this handler.
+        _startupCheck.CheckedChanged -= StartupCheckChanged;
+        _startupCheck.Checked = IsRunAtStartupEnabled();
+        _startupCheck.CheckedChanged += StartupCheckChanged;
     }
 
     private void ToggleEnforcement()

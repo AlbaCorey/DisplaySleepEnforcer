@@ -17,7 +17,8 @@ DSE works around this by temporarily overriding the global Windows policy `"Allo
 - **Displays power requests are overridden while locked** — handles browsers, VLC, etc.
 - **Re-asserts** the policy periodically while locked to prevent other software from undoing it.
 - **Tray minimization** (optional).
-- **Per-user installer** or per-machine installer (choice on first wizard page). Optional sign-in startup task.
+- **Per-user installer** or per-machine installer (choice on first wizard page).
+- **Starts with Windows by default** — opt out in the installer or toggle "Start automatically when I sign in" in the app.
 
 ## Requirements
 
@@ -36,7 +37,8 @@ You can also run the portable `DisplaySleepEnforcer.exe` directly (it's included
 
 ## How to use
 
-1. Launch "Display Sleep Enforcer" (from Start Menu/Desktop/Startup).
+1. Launch "Display Sleep Enforcer" (from Start Menu/Desktop, or it starts automatically if sign-in startup is on).
+   - Use the **"Start automatically when I sign in"** checkbox to turn sign-in startup on/off at any time.
 2. Set "Turn displays off after (seconds idle):" — this is the timeout used in **locked-only** mode (measured after the PC is locked).
 3. Check **"Only enforce display sleep while the PC is locked"**.
 4. Adjust the re-check interval if desired, then press **Start**.

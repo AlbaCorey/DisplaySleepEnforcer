@@ -70,8 +70,9 @@ SignedUninstaller=yes
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
+; Checked by default (opt-out): the user can untick this to skip sign-in startup.
+Name: "startup"; Description: "Start {#AppName} automatically when I sign in"; GroupDescription: "Startup:"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
-Name: "startup"; Description: "Start {#AppName} automatically when I sign in"; GroupDescription: "Startup:"; Flags: unchecked
 
 [Files]
 Source: "..\compiled\{#AppExeName}"; DestDir: "{app}"; Flags: ignoreversion{#FileSignFlag}
@@ -79,8 +80,10 @@ Source: "..\compiled\{#AppExeName}"; DestDir: "{app}"; Flags: ignoreversion{#Fil
 [Icons]
 Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExeName}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Tasks: desktopicon
-Name: "{userstartup}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Tasks: startup; Check: not IsAdminInstallMode
-Name: "{commonstartup}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Tasks: startup; Check: IsAdminInstallMode
+
+[Registry]
+; Sign-in startup is a per-user HKCU Run value (matches the app's own toggle).
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "DisplaySleepEnforcer"; ValueData: """{app}\{#AppExeName}"""; Tasks: startup; Flags: uninsdeletevalue
 
 [Run]
 Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(AppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
