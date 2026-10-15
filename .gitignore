@@ -1,0 +1,11 @@
+# Build output (produced from source/ by build.ps1; never hand-edited)
+compiled/
+
+# Local signing configuration (see source/signing.example.ps1)
+source/signing.ps1
+
+# OS / editor noise
+Thumbs.db
+desktop.ini
+.vs/
+*.user
