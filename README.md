@@ -94,6 +94,16 @@ To build without optional signing, add `-NoSign`. See `source\signing.example.ps
 
 The code lives in `source/DisplaySleepEnforcer.cs`; `compiled/` is build output and should never be edited by hand.
 
+## Reporting bugs
+
+Bug reports and feature requests are welcome on the [issue tracker](https://github.com/AlbaCorey/DisplaySleepEnforcer/issues). When reporting a display-sleep problem, please include:
+
+- The DSE version (the release you installed, e.g. `0.4.0`).
+- Your Windows version and build (`winver`).
+- Which modes you enabled (locked, unlocked, or both) and the timeout(s) you set.
+- Whether it happens with a specific app (media players, remote desktop, and so on).
+- The relevant lines from the in-app log at the bottom of the window.
+
 ## License
 
 Copyright (C) 2026 AlbaCorey
