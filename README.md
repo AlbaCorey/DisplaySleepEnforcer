@@ -32,7 +32,7 @@ DSE works around this by temporarily overriding the global Windows policy `"Allo
 
 ## Installation
 
-1. Download the latest `DSE-Setup.exe` from [Releases](https://github.com/ferdef150/DisplaySleepEnforcer/releases).
+1. Download the latest `DSE-Setup.exe` from [Releases](https://github.com/AlbaCorey/DisplaySleepEnforcer/releases).
 2. Run it. The installer is **unsigned** — SmartScreen may show "unknown publisher". Select *More info → Run anyway* to continue.
 3. Choose per-user or per-machine, and finish the installation.
 
