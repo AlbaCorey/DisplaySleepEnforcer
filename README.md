@@ -32,7 +32,7 @@ DSE works around this by temporarily overriding the global Windows policy `"Allo
 2. Run it. The installer is **unsigned** — SmartScreen may show "unknown publisher". Select *More info → Run anyway* to continue.
 3. Choose per-user or per-machine, and finish the installation.
 
-You can also run the portable `DisplaySleepEnforcer.exe` directly from `compiled/` if built from source.
+You can also run the portable `DisplaySleepEnforcer.exe` directly (it's included in the release assets as well as in `compiled/` when built from source).
 
 ## How to use
 
