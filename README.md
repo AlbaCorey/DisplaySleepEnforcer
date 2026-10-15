@@ -80,4 +80,8 @@ The code lives in `source/DisplaySleepEnforcer.cs`; `compiled/` is build output 
 
 ## License
 
-MIT. See [LICENSE](LICENSE) if added later (not present yet). This is free and open software provided as-is.
+Copyright (C) 2026 ferdef150
+
+This program is free software: you can redistribute it and/or modify it under the terms of the **GNU General Public License** as published by the Free Software Foundation, either **version 3 of the License, or (at your option) any later version** (SPDX: `GPL-3.0-or-later`).
+
+It is distributed in the hope that it will be useful, but **WITHOUT ANY WARRANTY**; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the [full text](LICENSE) for details.
