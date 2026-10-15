@@ -26,19 +26,32 @@ using Microsoft.Win32;
 internal static class Native
 {
     public const uint WM_SYSCOMMAND = 0x0112;
+    public const uint WM_POWERBROADCAST = 0x0218;
+    public const uint PBT_POWERSETTINGCHANGE = 0x8013;
     public const uint SMTO_ABORTIFHUNG = 0x0002;
     private const uint DESKTOP_READOBJECTS = 0x0001;
+    private const uint DEVICE_NOTIFY_WINDOW_HANDLE = 0x0000;
     private const int UOI_NAME = 2;
 
     public static readonly IntPtr HWND_BROADCAST = new IntPtr(0xFFFF);
     public static readonly IntPtr SC_MONITORPOWER = new IntPtr(0xF170);
     public static readonly IntPtr MONITOR_OFF = new IntPtr(2);
+    public static readonly Guid ConsoleDisplayState =
+        new Guid("6fe69556-704a-47a0-8f24-c28d936fda47");
 
     [StructLayout(LayoutKind.Sequential)]
     public struct LASTINPUTINFO
     {
         public uint cbSize;
         public uint dwTime;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct POWERBROADCAST_SETTING
+    {
+        public Guid PowerSetting;
+        public uint DataLength;
+        public byte Data;
     }
 
     [DllImport("user32.dll", SetLastError = true)]
@@ -58,6 +71,16 @@ internal static class Native
     [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
     private static extern bool GetUserObjectInformation(
         IntPtr hObj, int nIndex, StringBuilder pvInfo, int nLength, out int lpnLengthNeeded);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern IntPtr RegisterPowerSettingNotification(
+        IntPtr hRecipient, ref Guid powerSettingGuid, uint flags);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool UnregisterPowerSettingNotification(IntPtr handle);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool LockWorkStation();
 
     public static void TurnOffMonitors()
     {
@@ -105,6 +128,25 @@ internal static class Native
         {
             CloseDesktop(desktop);
         }
+    }
+
+    public static IntPtr RegisterDisplayStateNotification(IntPtr window)
+    {
+        Guid setting = ConsoleDisplayState;
+        return RegisterPowerSettingNotification(window, ref setting, DEVICE_NOTIFY_WINDOW_HANDLE);
+    }
+
+    public static void UnregisterNotification(IntPtr handle)
+    {
+        if (handle != IntPtr.Zero)
+        {
+            UnregisterPowerSettingNotification(handle);
+        }
+    }
+
+    public static bool Lock()
+    {
+        return LockWorkStation();
     }
 }
 
@@ -177,6 +219,26 @@ internal static class PowerSettings
     public static bool TryWriteAllowDisplay(uint ac, uint dc)
     {
         return TryWriteValue(AllowDisplay, ac, dc);
+    }
+
+    public static bool TryGetActiveSchemeGuid(out Guid scheme)
+    {
+        return TryGetActiveScheme(out scheme);
+    }
+
+    public static bool TryRestore(
+        Guid scheme, uint videoConLockAc, uint videoConLockDc, uint allowDisplayAc, uint allowDisplayDc)
+    {
+        Guid sub = SubVideo;
+        Guid videoConLock = VideoConLock;
+        Guid allowDisplay = AllowDisplay;
+        uint vclAcResult = PowerWriteACValueIndex(IntPtr.Zero, ref scheme, ref sub, ref videoConLock, videoConLockAc);
+        uint vclDcResult = PowerWriteDCValueIndex(IntPtr.Zero, ref scheme, ref sub, ref videoConLock, videoConLockDc);
+        uint allowAcResult = PowerWriteACValueIndex(IntPtr.Zero, ref scheme, ref sub, ref allowDisplay, allowDisplayAc);
+        uint allowDcResult = PowerWriteDCValueIndex(IntPtr.Zero, ref scheme, ref sub, ref allowDisplay, allowDisplayDc);
+        uint activeResult = PowerSetActiveScheme(IntPtr.Zero, ref scheme);
+        return vclAcResult == 0 && vclDcResult == 0 && allowAcResult == 0 &&
+            allowDcResult == 0 && activeResult == 0;
     }
 
     private static bool TryReadValue(Guid settingGuid, out uint ac, out uint dc)
@@ -307,6 +369,151 @@ internal sealed class DisplayRequestPolicy
     }
 }
 
+internal static class PowerRecovery
+{
+    // Records the values of the power settings this app changes so that, if the
+    // process is killed before it can put them back, the next launch can restore
+    // the user's power plan instead of leaving it altered.
+    private const string SubKeyPath = @"Software\DisplaySleepEnforcer\Recovery";
+    private const string SchemeValue = "Scheme";
+    private const string VideoConLockValue = "VideoConLock";
+    private const string AllowDisplayValue = "AllowDisplay";
+
+    public static bool Exists()
+    {
+        try
+        {
+            using (RegistryKey key = Registry.CurrentUser.OpenSubKey(SubKeyPath, false))
+            {
+                return key != null && key.GetValue(SchemeValue) != null;
+            }
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    public static bool Capture()
+    {
+        if (Exists())
+        {
+            return false;
+        }
+
+        Guid scheme;
+        if (!PowerSettings.TryGetActiveSchemeGuid(out scheme))
+        {
+            return false;
+        }
+
+        uint vclAc;
+        uint vclDc;
+        uint allowAc;
+        uint allowDc;
+        if (!PowerSettings.TryReadVideoConLock(out vclAc, out vclDc) ||
+            !PowerSettings.TryReadAllowDisplay(out allowAc, out allowDc))
+        {
+            return false;
+        }
+
+        try
+        {
+            using (RegistryKey key = Registry.CurrentUser.CreateSubKey(SubKeyPath))
+            {
+                if (key == null)
+                {
+                    return false;
+                }
+
+                key.SetValue(SchemeValue, scheme.ToString("D"), RegistryValueKind.String);
+                key.SetValue(VideoConLockValue, vclAc + ";" + vclDc, RegistryValueKind.String);
+                key.SetValue(AllowDisplayValue, allowAc + ";" + allowDc, RegistryValueKind.String);
+            }
+
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    public static bool TryRestore(out string detail)
+    {
+        detail = null;
+
+        string schemeText;
+        string vclText;
+        string allowText;
+        try
+        {
+            using (RegistryKey key = Registry.CurrentUser.OpenSubKey(SubKeyPath, false))
+            {
+                if (key == null)
+                {
+                    return false;
+                }
+
+                schemeText = key.GetValue(SchemeValue) as string;
+                vclText = key.GetValue(VideoConLockValue) as string;
+                allowText = key.GetValue(AllowDisplayValue) as string;
+            }
+        }
+        catch
+        {
+            return false;
+        }
+
+        Guid scheme;
+        uint vclAc;
+        uint vclDc;
+        uint allowAc;
+        uint allowDc;
+        if (!Guid.TryParse(schemeText, out scheme) ||
+            !TryParsePair(vclText, out vclAc, out vclDc) ||
+            !TryParsePair(allowText, out allowAc, out allowDc))
+        {
+            return false;
+        }
+
+        if (!PowerSettings.TryRestore(scheme, vclAc, vclDc, allowAc, allowDc))
+        {
+            return false;
+        }
+
+        detail = "lock display timeout " + vclAc + "s, allow-display policy " + allowAc + "/" + allowDc;
+        Clear();
+        return true;
+    }
+
+    public static void Clear()
+    {
+        try
+        {
+            Registry.CurrentUser.DeleteSubKeyTree(SubKeyPath, false);
+        }
+        catch
+        {
+        }
+    }
+
+    private static bool TryParsePair(string text, out uint ac, out uint dc)
+    {
+        ac = 0;
+        dc = 0;
+        if (text == null)
+        {
+            return false;
+        }
+
+        string[] parts = text.Split(';');
+        return parts.Length == 2 &&
+            uint.TryParse(parts[0], out ac) &&
+            uint.TryParse(parts[1], out dc);
+    }
+}
+
 internal sealed class LockWatcher
 {
     // The input-desktop poll used to be the only signal, but it can report a
@@ -384,12 +591,15 @@ internal sealed class Enforcer
     // (~5s at the 250 ms lock-check cadence) to defeat anything that resets it.
     private const int ReassertIntervalIterations = 20;
 
+    private const double CountdownDelaySeconds = 5.0;
+
     private volatile bool _running;
     private Thread _thread;
     private double _idleSeconds = 60.0;
     private double _enforceSeconds = 2.0;
     private bool _lockedOnly;
     private bool _wasLocked;
+    private bool _recoveryCaptured;
     private readonly LockDisplayTimeout _lockTimeout = new LockDisplayTimeout();
     private readonly DisplayRequestPolicy _requestPolicy = new DisplayRequestPolicy();
     private readonly LockWatcher _lockWatch = new LockWatcher();
@@ -431,14 +641,16 @@ internal sealed class Enforcer
 
     private void Loop()
     {
-        uint threshold = (uint)(_idleSeconds * 1000.0);
+        uint threshold = (uint)((_idleSeconds + CountdownDelaySeconds) * 1000.0);
         int delay = (int)(_enforceSeconds * 1000.0);
         bool forced = false;
         int sinceReassert = 0;
 
         if (_lockedOnly)
         {
-            uint lockedSeconds = (uint)Math.Round(_idleSeconds);
+            _recoveryCaptured = PowerRecovery.Capture();
+
+            uint lockedSeconds = (uint)Math.Round(_idleSeconds + CountdownDelaySeconds);
             if (_lockTimeout.Apply(lockedSeconds))
             {
                 Raise("Enforcement active (locked-only): the display will turn off " +
@@ -453,6 +665,7 @@ internal sealed class Enforcer
         else
         {
             Raise("Enforcement active - displays off after " + _idleSeconds + "s idle.");
+            Raise("Idle countdown started.");
         }
 
         try
@@ -472,6 +685,8 @@ internal sealed class Enforcer
 
                         if (lockedNow)
                         {
+                            Raise("Idle countdown started (locked).");
+
                             if (_requestPolicy.Suppress())
                             {
                                 Raise("Overriding display power requests so the screen can turn off while locked.");
@@ -523,6 +738,12 @@ internal sealed class Enforcer
         {
             _requestPolicy.Restore();
             _lockTimeout.Restore();
+
+            if (_recoveryCaptured)
+            {
+                _recoveryCaptured = false;
+                PowerRecovery.Clear();
+            }
         }
 
         Raise("Enforcement stopped.");
@@ -563,12 +784,15 @@ internal sealed class MainForm : Form
     private readonly CheckBox _trayCheck;
     private readonly CheckBox _lockedOnlyCheck;
     private readonly CheckBox _startupCheck;
+    private readonly CheckBox _lockOnSleepCheck;
     private readonly Label _statusLabel;
     private readonly TextBox _logBox;
     private readonly NotifyIcon _tray;
+    private readonly ToolTip _toolTip = new ToolTip();
     private readonly Enforcer _enforcer = new Enforcer();
     private readonly Icon _appIcon;
     private bool _closing;
+    private IntPtr _displayNotify = IntPtr.Zero;
 
     public MainForm()
     {
@@ -576,7 +800,7 @@ internal sealed class MainForm : Form
         FormBorderStyle = FormBorderStyle.FixedSingle;
         MaximizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(420, 420);
+        ClientSize = new Size(420, 444);
         Font = new Font("Segoe UI", 9F);
 
         _appIcon = LoadAppIcon();
@@ -636,25 +860,34 @@ internal sealed class MainForm : Form
         _startupCheck.Checked = IsRunAtStartupEnabled();
         _startupCheck.CheckedChanged += StartupCheckChanged;
 
+        _lockOnSleepCheck = new CheckBox();
+        _lockOnSleepCheck.Text = "Lock the PC when the display turns off";
+        _lockOnSleepCheck.Location = new Point(12, 160);
+        _lockOnSleepCheck.AutoSize = true;
+        _lockOnSleepCheck.CheckedChanged += LockOnSleepCheckChanged;
+        _toolTip.SetToolTip(_lockOnSleepCheck,
+            "Locks the PC whenever the display turns off (including when the power plan " +
+            "turns it off). Active while this app is running, independent of the Start/Stop button.");
+
         _startButton = new Button();
         _startButton.Text = "Start";
-        _startButton.Location = new Point(12, 168);
+        _startButton.Location = new Point(12, 192);
         _startButton.Size = new Size(120, 32);
         _startButton.Click += StartButtonClick;
 
         _forceButton = new Button();
         _forceButton.Text = "Force off now";
-        _forceButton.Location = new Point(140, 168);
+        _forceButton.Location = new Point(140, 192);
         _forceButton.Size = new Size(120, 32);
         _forceButton.Click += ForceButtonClick;
 
         _statusLabel = new Label();
         _statusLabel.Text = "Stopped.";
-        _statusLabel.Location = new Point(12, 214);
+        _statusLabel.Location = new Point(12, 238);
         _statusLabel.AutoSize = true;
 
         _logBox = new TextBox();
-        _logBox.Location = new Point(12, 240);
+        _logBox.Location = new Point(12, 264);
         _logBox.Size = new Size(396, 168);
         _logBox.Multiline = true;
         _logBox.ReadOnly = true;
@@ -673,6 +906,7 @@ internal sealed class MainForm : Form
         Controls.Add(_trayCheck);
         Controls.Add(_lockedOnlyCheck);
         Controls.Add(_startupCheck);
+        Controls.Add(_lockOnSleepCheck);
         Controls.Add(_startButton);
         Controls.Add(_forceButton);
         Controls.Add(_statusLabel);
@@ -692,8 +926,28 @@ internal sealed class MainForm : Form
         _tray.ContextMenuStrip = menu;
         _tray.DoubleClick += delegate { RestoreFromTray(); };
 
+        RunCrashRecovery();
+
         Resize += FormResize;
         FormClosing += FormClosingHandler;
+    }
+
+    private void RunCrashRecovery()
+    {
+        if (!PowerRecovery.Exists())
+        {
+            return;
+        }
+
+        string detail;
+        if (PowerRecovery.TryRestore(out detail))
+        {
+            AppendLog("Recovered power settings left changed by a previous run (" + detail + ").");
+        }
+        else
+        {
+            AppendLog("A previous run left power settings changed but they could not be restored.");
+        }
     }
 
     private void StartButtonClick(object sender, EventArgs e)
@@ -770,6 +1024,89 @@ internal sealed class MainForm : Form
         _startupCheck.CheckedChanged += StartupCheckChanged;
     }
 
+    private void LockOnSleepCheckChanged(object sender, EventArgs e)
+    {
+        if (_lockOnSleepCheck.Checked)
+        {
+            RegisterDisplayStateNotification();
+        }
+        else
+        {
+            UnregisterDisplayStateNotification();
+            AppendLog("Will no longer lock the PC when the display turns off.");
+        }
+    }
+
+    private void RegisterDisplayStateNotification()
+    {
+        if (_displayNotify != IntPtr.Zero)
+        {
+            return;
+        }
+
+        _displayNotify = Native.RegisterDisplayStateNotification(Handle);
+        if (_displayNotify != IntPtr.Zero)
+        {
+            AppendLog("Will lock the PC when the display turns off (independent of Start/Stop; active while the app runs).");
+            return;
+        }
+
+        AppendLog("Could not enable lock-on-display-off.");
+
+        // Revert the checkbox without re-raising this handler.
+        _lockOnSleepCheck.CheckedChanged -= LockOnSleepCheckChanged;
+        _lockOnSleepCheck.Checked = false;
+        _lockOnSleepCheck.CheckedChanged += LockOnSleepCheckChanged;
+    }
+
+    private void UnregisterDisplayStateNotification()
+    {
+        if (_displayNotify == IntPtr.Zero)
+        {
+            return;
+        }
+
+        Native.UnregisterNotification(_displayNotify);
+        _displayNotify = IntPtr.Zero;
+    }
+
+    protected override void WndProc(ref Message m)
+    {
+        if (m.Msg == (int)Native.WM_POWERBROADCAST &&
+            m.WParam.ToInt64() == Native.PBT_POWERSETTINGCHANGE)
+        {
+            HandlePowerSettingChange(m.LParam);
+        }
+
+        base.WndProc(ref m);
+    }
+
+    private void HandlePowerSettingChange(IntPtr lParam)
+    {
+        Native.POWERBROADCAST_SETTING setting =
+            (Native.POWERBROADCAST_SETTING)Marshal.PtrToStructure(
+                lParam, typeof(Native.POWERBROADCAST_SETTING));
+
+        if (setting.PowerSetting != Native.ConsoleDisplayState || setting.Data != 0)
+        {
+            return;
+        }
+
+        if (!_lockOnSleepCheck.Checked)
+        {
+            return;
+        }
+
+        if (Native.Lock())
+        {
+            AppendLog("DSE locked the PC because the display turned off.");
+        }
+        else
+        {
+            AppendLog("DSE could not lock the PC after the display turned off.");
+        }
+    }
+
     private void ToggleEnforcement()
     {
         if (_enforcer.IsRunning)
@@ -789,6 +1126,7 @@ internal sealed class MainForm : Form
                 return;
             }
 
+            AppendLog("Start pressed: idle timer = " + idleSeconds + "s.");
             _enforcer.Start(idleSeconds, (double)_enforceNum.Value, _lockedOnlyCheck.Checked);
             SetUiRunning(true);
         }
@@ -851,9 +1189,11 @@ internal sealed class MainForm : Form
     private void FormClosingHandler(object sender, FormClosingEventArgs e)
     {
         _closing = true;
+        UnregisterDisplayStateNotification();
         _enforcer.Stop();
         _tray.Visible = false;
         _tray.Dispose();
+        _toolTip.Dispose();
     }
 
     private void OnEnforcerMessage(string message)
@@ -899,6 +1239,20 @@ internal sealed class MainForm : Form
     {
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
-        Application.Run(new MainForm());
+
+        bool createdNew;
+        using (Mutex mutex = new Mutex(true, @"Local\DisplaySleepEnforcer.SingleInstance", out createdNew))
+        {
+            if (!createdNew)
+            {
+                MessageBox.Show(
+                    "Display Sleep Enforcer is already running. Look for its icon in the notification area.",
+                    "Display Sleep Enforcer",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            Application.Run(new MainForm());
+        }
     }
 }
