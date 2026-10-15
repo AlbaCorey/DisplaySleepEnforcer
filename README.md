@@ -21,8 +21,10 @@ DSE works around this by temporarily overriding the global Windows policy `"Allo
 
 ## Requirements
 
-- Windows 10/11
+- Windows 10 or Windows 11 (x64; ARM64 via x64 emulation)
 - .NET Framework 4.x (present on all supported Windows versions)
+
+**Not supported:** Windows 8.1 and earlier, and Windows Server, are untested and not supported. The core mechanisms (the `VIDEOCONLOCK` power setting and `SystemEvents.SessionSwitch`) also exist on Windows 8/8.1, and the `powercfg` APIs predate that, so it *may* work there — but the "Allow display required policy" setting and modern lock-screen/power-request behavior are only documented for Windows 10/11, and DSE has only been tested on Windows 11. Treat 8.1 as untested, and 7/older as unsupported.
 
 ## Installation
 
