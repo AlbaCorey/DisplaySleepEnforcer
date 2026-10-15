@@ -23,7 +23,7 @@
 ; ---------------------------------------------------------------------------
 
 #define AppName      "Display Sleep Enforcer"
-#define AppVersion   "0.3.0"
+#define AppVersion   "0.4.0"
 #define AppPublisher "DSE Project"
 #define AppExeName   "DisplaySleepEnforcer.exe"
 
