@@ -1,6 +1,6 @@
 # Display Sleep Enforcer
 
-**Status:** Pre-release (v0.1.0)
+**Status:** Pre-release (v0.2.0)
 
 Display Sleep Enforcer is a small Windows tray application that forces displays to turn off after an idle timeout. Its standout feature: it can enforce display sleep **while the PC is locked**, even when applications (media players, browsers, games, etc.) are holding active display power requests.
 
