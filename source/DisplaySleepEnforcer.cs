@@ -33,6 +33,9 @@ internal static class Native
     private const uint DESKTOP_READOBJECTS = 0x0001;
     private const uint DEVICE_NOTIFY_WINDOW_HANDLE = 0x0000;
     private const int UOI_NAME = 2;
+    // DWMWA_USE_IMMERSIVE_DARK_MODE: 20 on Windows 10 20H1+, 19 on 1809/1903.
+    private const int DwmwaUseImmersiveDarkMode = 20;
+    private const int DwmwaUseImmersiveDarkModePre20H1 = 19;
 
     public static readonly IntPtr HWND_BROADCAST = new IntPtr(0xFFFF);
     public static readonly IntPtr SC_MONITORPOWER = new IntPtr(0xF170);
@@ -91,9 +94,9 @@ internal static class Native
         int value = enabled ? 1 : 0;
         try
         {
-            if (DwmSetWindowAttribute(hwnd, 20, ref value, sizeof(int)) != 0)
+            if (DwmSetWindowAttribute(hwnd, DwmwaUseImmersiveDarkMode, ref value, sizeof(int)) != 0)
             {
-                DwmSetWindowAttribute(hwnd, 19, ref value, sizeof(int));
+                DwmSetWindowAttribute(hwnd, DwmwaUseImmersiveDarkModePre20H1, ref value, sizeof(int));
             }
         }
         catch
@@ -649,8 +652,14 @@ internal sealed class DarkColorTable : ProfessionalColorTable
     public override Color MenuItemSelected { get { return Theme.DarkHighlight; } }
     public override Color MenuItemSelectedGradientBegin { get { return Theme.DarkHighlight; } }
     public override Color MenuItemSelectedGradientEnd { get { return Theme.DarkHighlight; } }
+    public override Color MenuItemPressedGradientBegin { get { return Theme.DarkHighlight; } }
+    public override Color MenuItemPressedGradientMiddle { get { return Theme.DarkHighlight; } }
+    public override Color MenuItemPressedGradientEnd { get { return Theme.DarkHighlight; } }
     public override Color MenuItemBorder { get { return Theme.DarkHighlight; } }
     public override Color MenuBorder { get { return Theme.DarkBorder; } }
+    public override Color CheckBackground { get { return Theme.DarkSurface; } }
+    public override Color CheckSelectedBackground { get { return Theme.DarkHighlight; } }
+    public override Color CheckPressedBackground { get { return Theme.DarkHighlight; } }
     public override Color ImageMarginGradientBegin { get { return Theme.DarkSurface; } }
     public override Color ImageMarginGradientMiddle { get { return Theme.DarkSurface; } }
     public override Color ImageMarginGradientEnd { get { return Theme.DarkSurface; } }
@@ -1090,9 +1099,9 @@ internal sealed class MainForm : Form
     private int _themeMode = Theme.SystemMode;
     private bool _dark;
     private readonly DarkMenuRenderer _darkMenuRenderer = new DarkMenuRenderer();
-    private ToolStripMenuItem _appearanceSystem;
-    private ToolStripMenuItem _appearanceLight;
-    private ToolStripMenuItem _appearanceDark;
+    private readonly ToolStripMenuItem _appearanceSystem;
+    private readonly ToolStripMenuItem _appearanceLight;
+    private readonly ToolStripMenuItem _appearanceDark;
     private IntPtr _displayNotify = IntPtr.Zero;
 
     public MainForm()
@@ -1371,18 +1380,9 @@ internal sealed class MainForm : Form
 
     private void UpdateThemeMenuChecks()
     {
-        if (_appearanceSystem != null)
-        {
-            _appearanceSystem.Checked = _themeMode == Theme.SystemMode;
-        }
-        if (_appearanceLight != null)
-        {
-            _appearanceLight.Checked = _themeMode == Theme.LightMode;
-        }
-        if (_appearanceDark != null)
-        {
-            _appearanceDark.Checked = _themeMode == Theme.DarkMode;
-        }
+        _appearanceSystem.Checked = _themeMode == Theme.SystemMode;
+        _appearanceLight.Checked = _themeMode == Theme.LightMode;
+        _appearanceDark.Checked = _themeMode == Theme.DarkMode;
     }
 
     private void ApplyTrayTheme(bool dark)
@@ -1393,24 +1393,21 @@ internal sealed class MainForm : Form
             return;
         }
 
+        ApplyMenuTheme(menu, dark);
+    }
+
+    private void ApplyMenuTheme(ToolStrip menu, bool dark)
+    {
         menu.Renderer = dark ? (ToolStripRenderer)_darkMenuRenderer : null;
 
         foreach (ToolStripItem item in menu.Items)
         {
-            ApplyMenuItemTheme(item, dark);
-        }
-    }
+            item.ForeColor = dark ? Theme.DarkText : SystemColors.ControlText;
 
-    private static void ApplyMenuItemTheme(ToolStripItem item, bool dark)
-    {
-        item.ForeColor = dark ? Theme.DarkText : SystemColors.ControlText;
-
-        ToolStripMenuItem menuItem = item as ToolStripMenuItem;
-        if (menuItem != null)
-        {
-            foreach (ToolStripItem child in menuItem.DropDownItems)
+            ToolStripMenuItem menuItem = item as ToolStripMenuItem;
+            if (menuItem != null)
             {
-                ApplyMenuItemTheme(child, dark);
+                ApplyMenuTheme(menuItem.DropDown, dark);
             }
         }
     }
@@ -1597,7 +1594,9 @@ internal sealed class MainForm : Form
 
     protected override void WndProc(ref Message m)
     {
-        if (m.Msg == (int)Native.WM_SETTINGCHANGE && _themeMode == Theme.SystemMode)
+        if (m.Msg == (int)Native.WM_SETTINGCHANGE &&
+            _themeMode == Theme.SystemMode &&
+            Theme.Resolve(_themeMode) != _dark)
         {
             ApplyTheme();
         }
