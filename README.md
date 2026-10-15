@@ -42,7 +42,7 @@ You can also run the portable `DisplaySleepEnforcer.exe` directly (it's included
 
 1. Launch "Display Sleep Enforcer" (from Start Menu/Desktop, or it starts automatically if sign-in startup is on).
    - Use the **"Start automatically when I sign in"** checkbox to turn sign-in startup on/off at any time.
-2. Set "Turn displays off after:" using the **hh:mm:ss** spinners (default `00:01:00`) — this is the timeout used in **locked-only** mode (measured after the PC is locked).
+2. Set "Turn displays off after:" using the **hh:mm:ss** spinners (default `00:01:00`). This is the timeout for both modes — it is measured from the moment the PC is locked (**locked-only** mode), or from the last input while unlocked (**idle enforcement** mode).
 3. Check **"Only enforce display sleep while the PC is locked."**
 4. Adjust the re-check interval if desired, then press **Start**.
 5. Lock the PC (Win+L), start media, and the screen should turn off after the set timeout.
