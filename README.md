@@ -1,4 +1,4 @@
-# Display Sleep Enforcer
+# Display Sleep Enforcer (DSE)
 
 **Status:** Pre-release (v0.5.0)
 
