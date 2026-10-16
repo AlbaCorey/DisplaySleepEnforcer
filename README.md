@@ -2,7 +2,7 @@
 
 **Status:** Pre-release (v0.5.0)
 
-Display Sleep Enforcer (DSE) is a small Windows tray application that forces displays to turn off after an idle timeout. Two things set it apart: it enforces display sleep **even while the PC is locked**, when applications (media players, browsers, etc.) are holding active display power requests; and it can **lock the PC the moment the display turns off** — a safeguard Windows does not offer natively, and one that is not typical of other software.
+Display Sleep Enforcer (DSE) is a small Windows tray application that forces displays to turn off after an idle timeout. Two things set it apart: it enforces display sleep when applications (media players, browsers, etc.) are holding active display power requests, including while the PC is locked; and it can lock the PC the moment the display turns off — a feature that Windows keeps buried under group policy settings.
 
 ## Screenshots
 
@@ -24,7 +24,7 @@ DSE works around this by temporarily overriding the global Windows policy `"Allo
 - **Displays power requests are overridden while locked** — handles media players, browsers, etc.
 - **Re-asserts** the policy periodically while locked to prevent other software from undoing it.
 - **Force displays off now** — a button and a tray-menu item that turn the displays off immediately, whether or not enforcement is running.
-- **Lock the PC when the display turns off** — a safeguard Windows does not provide natively and that is not typical of other software. It works independently of Start/Stop for as long as DSE is running, and reacts to any cause of display-off (the power plan, unlocked enforcement, or a manual "Force displays off now").
+- **Lock the PC when the display turns off** — a safeguard Windows does not provide conveniently. It works independently of Start/Stop for as long as DSE is running, and reacts to any cause of display-off (the power plan, unlocked enforcement, or a manual "Force displays off now").
 - **Crash recovery** — if DSE is killed before it can undo its power-plan edits, the original values are restored on the next launch.
 - **Single instance** — launching a second copy tells you DSE is already running instead of disturbing the running one.
 - **Tray minimization** (optional).
@@ -60,7 +60,7 @@ You can also run the portable `DisplaySleepEnforcer.exe` directly (it's included
 
 To turn the displays off immediately at any time, use **"Force displays off now"** — the button in the window or the right-click item on the tray icon. This works whether or not enforcement is running.
 
-To also have the PC lock whenever the display goes to sleep — for example when the normal power plan turns the display off — tick **"Lock the PC when the display turns off."** Windows has no built-in option to lock on display-off, so this fills that gap. The toggle works independently of Start/Stop: it is active for as long as DSE is running.
+To also have the PC lock whenever the display goes to sleep — for example when the normal power plan turns the display off — tick **"Lock the PC when the display turns off."** The toggle works independently of Start/Stop: it is active for as long as DSE is running.
 
 The tray icon shows "Display Sleep Enforcer." Right-click to show the window, start/stop, force the displays off, choose the appearance (follow system, light, or dark), or exit.
 
