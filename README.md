@@ -12,7 +12,7 @@ Display Sleep Enforcer (DSE) is a small Windows tray application that forces dis
 
 ## Why this exists
 
-Normally, when an app holds a "display required" power request (e.g. a video player or web video prevents the screen from dimming/off), Windows ignores its normal idle display timeout. When the PC is locked, this becomes problematic: even if the system's lock-screen timeout would normally turn the display off, an active request keeps it on.
+Normally, when an app holds a "display required" power request (e.g. a video player or web video prevents the screen from dimming/off), Windows ignores its normal idle display timeout. When the PC is locked, this becomes problematic: even if the system's lock-screen timeout would normally turn the display off, an active request keeps it on. This is especially worrisome for OLED users.
 
 DSE works around this by temporarily overriding the global Windows policy `"Allow display required policy"` (setting it to `No`) while the PC is locked. That makes Windows ignore display power requests, allowing the display to turn off while the PC remains locked and media continues playing. It also restores the original policy on unlock, stop, or exit.
 
