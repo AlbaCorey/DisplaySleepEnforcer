@@ -69,9 +69,10 @@ To guard against closing DSE by accident, tick **"Ask before exiting"** — a co
 
 ## Notes & caveats
 
-- **Pre-release**: lightly tested on one machine (RDP, sleep/hibernate not extensively verified).
+- **Testing**: v1.0.0 was validated by an automated robustness pass on Windows 11 — single-instance guard, crash recovery, settings persistence and malformed-settings fallback, start-at-sign-in task self-heal and legacy migration, exit paths, and headless `--restore-power`. Still only one machine and one Windows build, so sleep/hibernate and RDP-specific behavior are not extensively verified — please file an issue if something misbehaves.
 - **Global policy**: while locked, DSE writes `ALLOWDISPLAY=0` for the active power scheme (AC/DC). This is a system-wide setting change — it's necessary to ignore all display power requests. DSE captures and restores the original values on unlock/stop/exit.
 - **Crash recovery**: before editing the power plan, DSE saves the original values to `HKCU\Software\DisplaySleepEnforcer\Recovery` and registers a one-shot `RunOnce` cleanup (`DisplaySleepEnforcer.exe --restore-power`). If the process is hard-killed, the next launch restores the values and logs what it undid, then clears the record. A clean stop clears it immediately. The `RunOnce` entry restores the power plan at the next sign-in **independently of the start-at-sign-in setting**, so the system-wide change cannot outlive a crash even if DSE never runs again.
+- **Damaged recovery record**: if `HKCU\Software\DisplaySleepEnforcer\Recovery` is ever edited or truncated by hand, DSE logs "could not be restored" at startup and will not overwrite the record, so automatic recovery stays off until the key is cleared. DSE never leaves the key in that state itself.
 - **Saved settings**: your timer values, checkboxes, and appearance are stored in `HKCU\Software\DisplaySleepEnforcer\Settings` and restored on the next launch. Enforcement itself always starts stopped; only the settings are remembered.
 - **Unsigned binary**: no Authenticode signature; expect SmartScreen warnings.
 - **Not admin required**: powercfg writes for the active scheme succeed for a standard user via the Power service, and the per-user logon task is created without elevation.
