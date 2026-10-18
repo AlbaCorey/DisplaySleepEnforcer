@@ -16,8 +16,12 @@
  */
 
 using System;
+using System.Diagnostics;
 using System.Drawing;
+using System.IO;
 using System.Runtime.InteropServices;
+using System.Security;
+using System.Security.Principal;
 using System.Text;
 using System.Threading;
 using System.Windows.Forms;
@@ -400,6 +404,9 @@ internal static class PowerRecovery
     private const string SchemeValue = "Scheme";
     private const string VideoConLockValue = "VideoConLock";
     private const string AllowDisplayValue = "AllowDisplay";
+    private const string RunOncePath = @"Software\Microsoft\Windows\CurrentVersion\RunOnce";
+    private const string RunOnceValueName = "DisplaySleepEnforcerRestore";
+    internal const string RestorePowerArgument = "--restore-power";
 
     public static bool Exists()
     {
@@ -453,6 +460,7 @@ internal static class PowerRecovery
                 key.SetValue(AllowDisplayValue, allowAc + ";" + allowDc, RegistryValueKind.String);
             }
 
+            WriteRunOnce();
             return true;
         }
         catch
@@ -514,6 +522,53 @@ internal static class PowerRecovery
         try
         {
             Registry.CurrentUser.DeleteSubKeyTree(SubKeyPath, false);
+        }
+        catch
+        {
+        }
+
+        ClearRunOnce();
+    }
+
+    // Schedules a one-shot cleanup for the next sign-in while a recovery record
+    // exists. RunOnce runs independently of the start-at-sign-in setting, so the
+    // power plan is put back even if the process is hard-killed and never launched
+    // again on its own.
+    private static void WriteRunOnce()
+    {
+        try
+        {
+            string exe = Application.ExecutablePath;
+            if (string.IsNullOrEmpty(exe))
+            {
+                return;
+            }
+
+            using (RegistryKey key = Registry.CurrentUser.CreateSubKey(RunOncePath))
+            {
+                if (key != null)
+                {
+                    key.SetValue(RunOnceValueName, "\"" + exe + "\" " + RestorePowerArgument,
+                        RegistryValueKind.String);
+                }
+            }
+        }
+        catch
+        {
+        }
+    }
+
+    public static void ClearRunOnce()
+    {
+        try
+        {
+            using (RegistryKey key = Registry.CurrentUser.OpenSubKey(RunOncePath, true))
+            {
+                if (key != null)
+                {
+                    key.DeleteValue(RunOnceValueName, false);
+                }
+            }
         }
         catch
         {
@@ -701,6 +756,7 @@ internal sealed class AppSettings
     public int EnforceMs = 2000;
     public bool MinimizeToTray = true;
     public bool LockOnSleep;
+    public bool ConfirmExit;
     public int Theme;
 }
 
@@ -714,6 +770,7 @@ internal static class SettingsStore
     private const string EnforceMsValue = "EnforceMs";
     private const string MinimizeToTrayValue = "MinimizeToTray";
     private const string LockOnSleepValue = "LockOnSleep";
+    private const string ConfirmExitValue = "ConfirmExit";
     private const string ThemeValue = "Theme";
 
     public static AppSettings Load()
@@ -735,6 +792,7 @@ internal static class SettingsStore
                 settings.EnforceMs = ReadInt(key, EnforceMsValue, settings.EnforceMs);
                 settings.MinimizeToTray = ReadBool(key, MinimizeToTrayValue, settings.MinimizeToTray);
                 settings.LockOnSleep = ReadBool(key, LockOnSleepValue, settings.LockOnSleep);
+                settings.ConfirmExit = ReadBool(key, ConfirmExitValue, settings.ConfirmExit);
                 settings.Theme = ReadInt(key, ThemeValue, settings.Theme);
             }
         }
@@ -763,6 +821,7 @@ internal static class SettingsStore
                 key.SetValue(EnforceMsValue, settings.EnforceMs, RegistryValueKind.DWord);
                 key.SetValue(MinimizeToTrayValue, settings.MinimizeToTray ? 1 : 0, RegistryValueKind.DWord);
                 key.SetValue(LockOnSleepValue, settings.LockOnSleep ? 1 : 0, RegistryValueKind.DWord);
+                key.SetValue(ConfirmExitValue, settings.ConfirmExit ? 1 : 0, RegistryValueKind.DWord);
                 key.SetValue(ThemeValue, settings.Theme, RegistryValueKind.DWord);
             }
         }
@@ -953,7 +1012,7 @@ internal sealed class Enforcer
             if (_lockTimeout.Apply(lockedSeconds))
             {
                 Raise("Enforcement active (locked): the display will turn off " +
-                    lockedSeconds + "s after the PC is locked.");
+                    _lockedSeconds + "s after the PC is locked.");
             }
             else
             {
@@ -1071,6 +1130,8 @@ internal sealed class Enforcer
 
 internal sealed class MainForm : Form
 {
+    private const string AppVersion = "0.5.0";
+    private const string TaskName = "DisplaySleepEnforcer";
     private const string RunKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
     private const string RunValueName = "DisplaySleepEnforcer";
 
@@ -1088,6 +1149,7 @@ internal sealed class MainForm : Form
     private readonly CheckBox _lockedCheck;
     private readonly CheckBox _startupCheck;
     private readonly CheckBox _lockOnSleepCheck;
+    private readonly CheckBox _confirmExitCheck;
     private readonly Label _statusLabel;
     private readonly TextBox _logBox;
     private readonly NotifyIcon _tray;
@@ -1096,6 +1158,7 @@ internal sealed class MainForm : Form
     private readonly Icon _appIcon;
     private bool _closing;
     private bool _loadingSettings;
+    private bool _startupVerified;
     private int _themeMode = Theme.SystemMode;
     private bool _dark;
     private readonly DarkMenuRenderer _darkMenuRenderer = new DarkMenuRenderer();
@@ -1106,11 +1169,11 @@ internal sealed class MainForm : Form
 
     public MainForm()
     {
-        Text = "Display Sleep Enforcer";
+        Text = "Display Sleep Enforcer v" + AppVersion;
         FormBorderStyle = FormBorderStyle.FixedSingle;
         MaximizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(420, 456);
+        ClientSize = new Size(420, 480);
         Font = new Font("Segoe UI", 9F);
 
         _appIcon = LoadAppIcon();
@@ -1187,7 +1250,7 @@ internal sealed class MainForm : Form
         _startupCheck.Text = "Start automatically when I sign in";
         _startupCheck.Location = new Point(12, 148);
         _startupCheck.AutoSize = true;
-        _startupCheck.Checked = IsRunAtStartupEnabled();
+        _startupCheck.Checked = IsStartupEnabled();
         _startupCheck.CheckedChanged += StartupCheckChanged;
 
         _lockOnSleepCheck = new CheckBox();
@@ -1199,25 +1262,33 @@ internal sealed class MainForm : Form
             "Locks the PC whenever the display turns off (including when the power plan " +
             "turns it off). Active while this app is running, independent of the Start/Stop button.");
 
+        _confirmExitCheck = new CheckBox();
+        _confirmExitCheck.Text = "Ask before exiting";
+        _confirmExitCheck.Location = new Point(12, 196);
+        _confirmExitCheck.AutoSize = true;
+        _toolTip.SetToolTip(_confirmExitCheck,
+            "Show a confirmation prompt before the app closes, so the tray Exit item " +
+            "cannot shut it down by accident.");
+
         _startButton = new Button();
         _startButton.Text = "Start";
-        _startButton.Location = new Point(12, 204);
+        _startButton.Location = new Point(12, 228);
         _startButton.Size = new Size(194, 32);
         _startButton.Click += StartButtonClick;
 
         _forceButton = new Button();
         _forceButton.Text = "Force displays off now";
-        _forceButton.Location = new Point(214, 204);
+        _forceButton.Location = new Point(214, 228);
         _forceButton.Size = new Size(194, 32);
         _forceButton.Click += ForceButtonClick;
 
         _statusLabel = new Label();
         _statusLabel.Text = "Stopped.";
-        _statusLabel.Location = new Point(12, 250);
+        _statusLabel.Location = new Point(12, 274);
         _statusLabel.AutoSize = true;
 
         _logBox = new TextBox();
-        _logBox.Location = new Point(12, 276);
+        _logBox.Location = new Point(12, 300);
         _logBox.Size = new Size(396, 168);
         _logBox.Multiline = true;
         _logBox.ReadOnly = true;
@@ -1242,6 +1313,7 @@ internal sealed class MainForm : Form
         Controls.Add(_trayCheck);
         Controls.Add(_startupCheck);
         Controls.Add(_lockOnSleepCheck);
+        Controls.Add(_confirmExitCheck);
         Controls.Add(_startButton);
         Controls.Add(_forceButton);
         Controls.Add(_statusLabel);
@@ -1283,6 +1355,7 @@ internal sealed class MainForm : Form
         ApplySavedSettings();
 
         Resize += FormResize;
+        Shown += MainFormShown;
         FormClosing += FormClosingHandler;
     }
 
@@ -1310,6 +1383,7 @@ internal sealed class MainForm : Form
         _lockedCheck.CheckedChanged += SettingsChanged;
         _trayCheck.CheckedChanged += SettingsChanged;
         _lockOnSleepCheck.CheckedChanged += SettingsChanged;
+        _confirmExitCheck.CheckedChanged += SettingsChanged;
         _enforceNum.ValueChanged += SettingsChanged;
         _unlockedHours.ValueChanged += SettingsChanged;
         _unlockedMinutes.ValueChanged += SettingsChanged;
@@ -1335,6 +1409,7 @@ internal sealed class MainForm : Form
             _enforceNum.Value = ClampEnforce(settings.EnforceMs);
             _trayCheck.Checked = settings.MinimizeToTray;
             _lockOnSleepCheck.Checked = settings.LockOnSleep;
+            _confirmExitCheck.Checked = settings.ConfirmExit;
         }
         finally
         {
@@ -1427,6 +1502,7 @@ internal sealed class MainForm : Form
         settings.EnforceMs = (int)Math.Round((double)_enforceNum.Value * 1000.0);
         settings.MinimizeToTray = _trayCheck.Checked;
         settings.LockOnSleep = _lockOnSleepCheck.Checked;
+        settings.ConfirmExit = _confirmExitCheck.Checked;
         settings.Theme = _themeMode;
 
         SettingsStore.Save(settings);
@@ -1483,7 +1559,10 @@ internal sealed class MainForm : Form
         AppendLog("Display-off command sent.");
     }
 
-    private static bool IsRunAtStartupEnabled()
+    // Legacy sign-in startup was a per-user HKCU Run value. It is still read so
+    // an upgrade from that version keeps the option on, and it is removed once
+    // the scheduled task below takes over.
+    private static bool IsLegacyRunEntryPresent()
     {
         try
         {
@@ -1498,52 +1577,263 @@ internal sealed class MainForm : Form
         }
     }
 
-    private static bool SetRunAtStartup(bool enabled)
+    private static void RemoveLegacyRunEntry()
     {
         try
         {
             using (RegistryKey key = Registry.CurrentUser.OpenSubKey(RunKeyPath, true))
             {
-                if (key == null)
-                {
-                    return false;
-                }
-
-                if (enabled)
-                {
-                    key.SetValue(RunValueName, "\"" + Application.ExecutablePath + "\"", RegistryValueKind.String);
-                }
-                else if (key.GetValue(RunValueName) != null)
+                if (key != null && key.GetValue(RunValueName) != null)
                 {
                     key.DeleteValue(RunValueName, false);
                 }
-
-                return true;
             }
+        }
+        catch
+        {
+        }
+    }
+
+    private static bool IsStartupTaskRegistered()
+    {
+        string output;
+        return RunSchTasks("/Query /TN \"" + TaskName + "\"", out output) == 0;
+    }
+
+    // The task is current when it exists and its action still points at this
+    // executable, so a moved or reinstalled copy repairs itself.
+    private static bool IsStartupTaskCurrent()
+    {
+        string output;
+        if (RunSchTasks("/Query /TN \"" + TaskName + "\" /XML", out output) != 0 ||
+            string.IsNullOrEmpty(output))
+        {
+            return false;
+        }
+
+        return output.IndexOf(Application.ExecutablePath, StringComparison.OrdinalIgnoreCase) >= 0;
+    }
+
+    private static bool IsStartupEnabled()
+    {
+        return IsStartupTaskRegistered() || IsLegacyRunEntryPresent();
+    }
+
+    private static bool IsStartupRegistrationHealthy()
+    {
+        return IsStartupTaskCurrent();
+    }
+
+    private static string BuildTaskXml()
+    {
+        string user = SecurityElement.Escape(WindowsIdentity.GetCurrent().Name);
+        string exe = SecurityElement.Escape(Application.ExecutablePath);
+        string dir = SecurityElement.Escape(Path.GetDirectoryName(Application.ExecutablePath));
+
+        // A per-user logon task that ignores new instances, starts even on
+        // battery, has no execution time limit, and restarts up to three times
+        // (one minute apart) if the app exits with a failure.
+        return
+            "<?xml version=\"1.0\" encoding=\"UTF-16\"?>" +
+            "<Task version=\"1.2\" xmlns=\"http://schemas.microsoft.com/windows/2004/02/mit/task\">" +
+            "<RegistrationInfo><Description>Starts Display Sleep Enforcer when you sign in.</Description></RegistrationInfo>" +
+            "<Triggers><LogonTrigger><Enabled>true</Enabled><UserId>" + user + "</UserId>" +
+            "<Delay>PT10S</Delay></LogonTrigger></Triggers>" +
+            "<Principals><Principal id=\"Author\"><UserId>" + user + "</UserId>" +
+            "<LogonType>InteractiveToken</LogonType><RunLevel>LeastPrivilege</RunLevel></Principal></Principals>" +
+            "<Settings>" +
+            "<MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>" +
+            "<DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>" +
+            "<StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>" +
+            "<AllowHardTerminate>true</AllowHardTerminate>" +
+            "<StartWhenAvailable>true</StartWhenAvailable>" +
+            "<RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>" +
+            "<IdleSettings><StopOnIdleEnd>false</StopOnIdleEnd><RestartOnIdle>false</RestartOnIdle></IdleSettings>" +
+            "<AllowStartOnDemand>true</AllowStartOnDemand>" +
+            "<Enabled>true</Enabled><Hidden>false</Hidden>" +
+            "<RunOnlyIfIdle>false</RunOnlyIfIdle><WakeToRun>false</WakeToRun>" +
+            "<ExecutionTimeLimit>PT0S</ExecutionTimeLimit>" +
+            "<Priority>7</Priority>" +
+            "<RestartOnFailure><Interval>PT1M</Interval><Count>3</Count></RestartOnFailure>" +
+            "</Settings>" +
+            "<Actions Context=\"Author\"><Exec>" +
+            "<Command>" + exe + "</Command>" +
+            "<WorkingDirectory>" + dir + "</WorkingDirectory>" +
+            "</Exec></Actions>" +
+            "</Task>";
+    }
+
+    // Creates (or refreshes) the per-user logon task. The XML is written as
+    // UTF-16 because schtasks requires a Unicode task definition file.
+    private static bool RegisterStartupTask()
+    {
+        string temp = Path.Combine(
+            Path.GetTempPath(), "dse-task-" + Guid.NewGuid().ToString("N") + ".xml");
+        try
+        {
+            File.WriteAllText(temp, BuildTaskXml(), Encoding.Unicode);
         }
         catch
         {
             return false;
         }
+
+        try
+        {
+            string output;
+            return RunSchTasks("/Create /TN \"" + TaskName + "\" /XML \"" + temp + "\" /F", out output) == 0;
+        }
+        finally
+        {
+            try
+            {
+                File.Delete(temp);
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    private static bool UnregisterStartupTask()
+    {
+        string output;
+        RunSchTasks("/Delete /TN \"" + TaskName + "\" /F", out output);
+        return !IsStartupTaskRegistered();
+    }
+
+    private static bool SetStartupEnabled(bool enabled)
+    {
+        RemoveLegacyRunEntry();
+        return enabled ? RegisterStartupTask() : UnregisterStartupTask();
+    }
+
+    private static int RunSchTasks(string arguments, out string output)
+    {
+        output = null;
+        try
+        {
+            ProcessStartInfo info = new ProcessStartInfo();
+            info.FileName = "schtasks.exe";
+            info.Arguments = arguments;
+            info.UseShellExecute = false;
+            info.CreateNoWindow = true;
+            info.RedirectStandardOutput = true;
+
+            using (Process process = Process.Start(info))
+            {
+                if (process == null)
+                {
+                    return -1;
+                }
+
+                output = process.StandardOutput.ReadToEnd();
+                if (!process.WaitForExit(15000))
+                {
+                    try
+                    {
+                        process.Kill();
+                    }
+                    catch
+                    {
+                    }
+
+                    return -1;
+                }
+
+                return process.ExitCode;
+            }
+        }
+        catch
+        {
+            return -1;
+        }
+    }
+
+    // Rewrites the scheduled task when it is missing or points at the wrong
+    // executable, then reports whether the entry is correct.
+    private static bool TryRepairStartupRegistration()
+    {
+        if (!IsStartupRegistrationHealthy())
+        {
+            RegisterStartupTask();
+        }
+
+        if (IsStartupRegistrationHealthy())
+        {
+            // Once the task is in place the old Run entry is redundant and would
+            // launch a second copy at sign-in.
+            RemoveLegacyRunEntry();
+            return true;
+        }
+
+        return false;
     }
 
     private void StartupCheckChanged(object sender, EventArgs e)
     {
         bool enabled = _startupCheck.Checked;
-        if (SetRunAtStartup(enabled))
+
+        if (enabled)
         {
-            AppendLog(enabled
-                ? "Will start automatically when you sign in."
-                : "Will no longer start automatically when you sign in.");
+            if (SetStartupEnabled(true) && IsStartupRegistrationHealthy())
+            {
+                AppendLog("Will start automatically when you sign in.");
+                return;
+            }
+        }
+        else if (SetStartupEnabled(false))
+        {
+            AppendLog("Will no longer start automatically when you sign in.");
             return;
         }
 
         AppendLog("Could not update the start-on-sign-in setting.");
+        MessageBox.Show(this,
+            "Display Sleep Enforcer could not set up start-at-sign-in. Check " +
+            "Task Scheduler, or try running the app as administrator.",
+            "Display Sleep Enforcer",
+            MessageBoxButtons.OK, MessageBoxIcon.Warning);
 
         // Revert the checkbox without re-raising this handler.
         _startupCheck.CheckedChanged -= StartupCheckChanged;
-        _startupCheck.Checked = IsRunAtStartupEnabled();
+        _startupCheck.Checked = IsStartupEnabled();
         _startupCheck.CheckedChanged += StartupCheckChanged;
+    }
+
+    private void MainFormShown(object sender, EventArgs e)
+    {
+        if (_startupVerified)
+        {
+            return;
+        }
+
+        _startupVerified = true;
+
+        // Only guard the sign-in entry when the user has the option enabled.
+        if (!_startupCheck.Checked)
+        {
+            return;
+        }
+
+        if (IsStartupRegistrationHealthy())
+        {
+            return;
+        }
+
+        if (TryRepairStartupRegistration())
+        {
+            AppendLog("Repaired the start-at-sign-in task so DSE runs at the next sign-in.");
+            return;
+        }
+
+        AppendLog("Warning: start-at-sign-in could not be confirmed.");
+        MessageBox.Show(this,
+            "Start-at-sign-in is enabled, but Display Sleep Enforcer could not confirm " +
+            "that it will run after you sign in. Check Task Scheduler, or try running " +
+            "the app as administrator.",
+            "Display Sleep Enforcer",
+            MessageBoxButtons.OK, MessageBoxIcon.Warning);
     }
 
     private void LockOnSleepCheckChanged(object sender, EventArgs e)
@@ -1761,6 +2051,27 @@ internal sealed class MainForm : Form
 
     private void FormClosingHandler(object sender, FormClosingEventArgs e)
     {
+        if (!_closing &&
+            _confirmExitCheck.Checked &&
+            e.CloseReason != CloseReason.WindowsShutDown &&
+            e.CloseReason != CloseReason.TaskManagerClosing)
+        {
+            IWin32Window owner = Visible ? (IWin32Window)this : null;
+            DialogResult result = MessageBox.Show(
+                owner,
+                "Exit Display Sleep Enforcer?",
+                "Display Sleep Enforcer",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question,
+                MessageBoxDefaultButton.Button2);
+
+            if (result != DialogResult.Yes)
+            {
+                e.Cancel = true;
+                return;
+            }
+        }
+
         _closing = true;
         UnregisterDisplayStateNotification();
         _enforcer.Stop();
@@ -1808,8 +2119,14 @@ internal sealed class MainForm : Form
     }
 
     [STAThread]
-    private static void Main()
+    private static void Main(string[] args)
     {
+        if (WantsRestorePower(args))
+        {
+            RunRestorePower();
+            return;
+        }
+
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
 
@@ -1827,5 +2144,40 @@ internal sealed class MainForm : Form
 
             Application.Run(new MainForm());
         }
+    }
+
+    private static bool WantsRestorePower(string[] args)
+    {
+        if (args == null)
+        {
+            return false;
+        }
+
+        foreach (string arg in args)
+        {
+            if (string.Equals(arg, PowerRecovery.RestorePowerArgument, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static void RunRestorePower()
+    {
+        try
+        {
+            if (PowerRecovery.Exists())
+            {
+                string detail;
+                PowerRecovery.TryRestore(out detail);
+            }
+        }
+        catch
+        {
+        }
+
+        PowerRecovery.ClearRunOnce();
     }
 }

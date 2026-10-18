@@ -25,13 +25,14 @@ DSE works around this by temporarily overriding the global Windows policy `"Allo
 - **Re-asserts** the policy periodically while locked to prevent other software from undoing it.
 - **Force displays off now** — a button and a tray-menu item that turn the displays off immediately, whether or not enforcement is running.
 - **Lock the PC when the display turns off** — a safeguard Windows does not provide conveniently. It works independently of Start/Stop for as long as DSE is running, and reacts to any cause of display-off (the power plan, unlocked enforcement, or a manual "Force displays off now").
-- **Crash recovery** — if DSE is killed before it can undo its power-plan edits, the original values are restored on the next launch.
+- **Crash recovery** — if DSE is killed before it can undo its power-plan edits, the original values are restored on the next launch, and a one-shot `RunOnce` entry restores them at the next sign-in even if DSE is never launched again.
 - **Single instance** — launching a second copy tells you DSE is already running instead of disturbing the running one.
 - **Tray minimization** (optional).
+- **Confirm before exiting** (optional) — asks for confirmation before DSE closes, so the tray **Exit** item cannot shut it down by accident. The prompt is skipped during a Windows shutdown.
 - **Remembers your settings** — timers, checkboxes, and appearance are saved and restored on the next launch.
 - **Light/dark appearance** — follows the Windows theme by default; switch to Light or Dark any time from the tray menu's **Appearance** submenu. The installer also lets you pick the initial theme.
 - **Per-user installer** or per-machine installer (choice on first wizard page).
-- **Starts with Windows by default** — opt out in the installer or toggle "Start automatically when I sign in" in the app.
+- **Starts with Windows by default** — opt out in the installer or toggle "Start automatically when I sign in" in the app. DSE registers a per-user Task Scheduler logon task with restart-on-failure, and verifies/repairs it on every launch (for example if the app has moved), warning you if it cannot.
 
 ## Requirements
 
@@ -64,14 +65,17 @@ To also have the PC lock whenever the display goes to sleep — for example when
 
 The tray icon shows "Display Sleep Enforcer." Right-click to show the window, start/stop, force the displays off, choose the appearance (follow system, light, or dark), or exit.
 
+To guard against closing DSE by accident, tick **"Ask before exiting"** — a confirmation prompt then appears whenever you exit the app (from the window or the tray), and is skipped when Windows itself is shutting down.
+
 ## Notes & caveats
 
 - **Pre-release**: lightly tested on one machine (RDP, sleep/hibernate not extensively verified).
 - **Global policy**: while locked, DSE writes `ALLOWDISPLAY=0` for the active power scheme (AC/DC). This is a system-wide setting change — it's necessary to ignore all display power requests. DSE captures and restores the original values on unlock/stop/exit.
-- **Crash recovery**: before editing the power plan, DSE saves the original values to `HKCU\Software\DisplaySleepEnforcer\Recovery`. If the process is hard-killed, the next launch restores them and logs what it undid, then clears the key. A clean stop clears it immediately.
+- **Crash recovery**: before editing the power plan, DSE saves the original values to `HKCU\Software\DisplaySleepEnforcer\Recovery` and registers a one-shot `RunOnce` cleanup (`DisplaySleepEnforcer.exe --restore-power`). If the process is hard-killed, the next launch restores the values and logs what it undid, then clears the record. A clean stop clears it immediately. The `RunOnce` entry restores the power plan at the next sign-in **independently of the start-at-sign-in setting**, so the system-wide change cannot outlive a crash even if DSE never runs again.
 - **Saved settings**: your timer values, checkboxes, and appearance are stored in `HKCU\Software\DisplaySleepEnforcer\Settings` and restored on the next launch. Enforcement itself always starts stopped; only the settings are remembered.
 - **Unsigned binary**: no Authenticode signature; expect SmartScreen warnings.
-- **Not admin required**: powercfg writes for the active scheme succeed for a standard user via the Power service.
+- **Not admin required**: powercfg writes for the active scheme succeed for a standard user via the Power service, and the per-user logon task is created without elevation.
+- **Sign-in task**: sign-in startup is a per-user Task Scheduler logon task named `DisplaySleepEnforcer`, not a `Run` key. The installer seeds the old `Run` value so startup works before the app first runs; the app converts it to the task and removes the value. Uninstalling removes the task.
 
 ## How it works
 
@@ -82,6 +86,7 @@ The tray icon shows "Display Sleep Enforcer." Right-click to show the window, st
 - On unlock/stop: restores both `VIDEOCONLOCK` and `ALLOWDISPLAY` to their original values.
 - The same 5-second margin applies to **unlocked** enforcement, so the display turns off `N + 5` seconds after the last input — but only while unlocked (the unlocked countdown pauses once the PC is locked).
 - **Lock on display off** subscribes the main window to `GUID_CONSOLE_DISPLAY_STATE` power notifications and calls `LockWorkStation()` whenever the console reports the display off — it does not depend on the Start/Stop state.
+- **Start-at-sign-in uses Task Scheduler**: DSE creates a per-user logon task (`DisplaySleepEnforcer`) that ignores new instances, has no execution time limit, and restarts the app up to three times (one minute apart) if it exits with a failure. On each launch, when the option is on, DSE checks that the task exists and that its action points at the current executable, re-registering it if not. If it still cannot confirm the task, it logs a warning and shows a message box. Upgrading from a version that used the `HKCU\...\Run` key migrates that entry to the task automatically.
 - A named mutex enforces a single running instance, so a second copy cannot undo the power-plan changes out from under the live one.
 
 ## Building from source

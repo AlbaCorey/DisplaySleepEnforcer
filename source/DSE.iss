@@ -83,7 +83,10 @@ Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExeName}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Tasks: desktopicon
 
 [Registry]
-; Sign-in startup is a per-user HKCU Run value (matches the app's own toggle).
+; Seed sign-in startup with a per-user HKCU Run value. On its first launch the
+; app migrates this to a robust per-user Task Scheduler logon task (with
+; restart-on-failure) and removes the Run value. This keeps a working startup
+; path in the window between install and first launch.
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "DisplaySleepEnforcer"; ValueData: """{app}\{#AppExeName}"""; Tasks: startup; Flags: uninsdeletevalue
 ; Initial appearance (0 = follow system, 1 = light, 2 = dark). Written once at
 ; install; the app manages it afterwards. Not removed on uninstall.
@@ -93,6 +96,10 @@ Root: HKCU; Subkey: "Software\DisplaySleepEnforcer\Settings"; ValueType: dword; 
 
 [Run]
 Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(AppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+
+[UninstallRun]
+; Remove the per-user sign-in task the app creates (migrated from the Run seed).
+Filename: "schtasks.exe"; Parameters: "/Delete /TN ""DisplaySleepEnforcer"" /F"; Flags: runhidden; RunOnceId: "DeleteDSEStartupTask"
 
 [Code]
 var
