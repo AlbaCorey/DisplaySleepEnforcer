@@ -1130,7 +1130,7 @@ internal sealed class Enforcer
 
 internal sealed class MainForm : Form
 {
-    private const string AppVersion = "0.5.0";
+    private const string AppVersion = "1.0.0";
     private const string TaskName = "DisplaySleepEnforcer";
     private const string RunKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
     private const string RunValueName = "DisplaySleepEnforcer";
