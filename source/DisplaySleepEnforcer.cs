@@ -753,10 +753,10 @@ internal sealed class AppSettings
     public int UnlockedSeconds = 900;
     public bool LockedEnabled = true;
     public int LockedSeconds = 60;
-    public int EnforceMs = 2000;
     public bool MinimizeToTray = true;
     public bool LockOnSleep;
     public bool ConfirmExit;
+    public bool AutoStartEnforcement;
     public int Theme;
 }
 
@@ -767,10 +767,10 @@ internal static class SettingsStore
     private const string UnlockedSecondsValue = "UnlockedSeconds";
     private const string LockedEnabledValue = "LockedEnabled";
     private const string LockedSecondsValue = "LockedSeconds";
-    private const string EnforceMsValue = "EnforceMs";
     private const string MinimizeToTrayValue = "MinimizeToTray";
     private const string LockOnSleepValue = "LockOnSleep";
     private const string ConfirmExitValue = "ConfirmExit";
+    private const string AutoStartValue = "AutoStartEnforcement";
     private const string ThemeValue = "Theme";
 
     public static AppSettings Load()
@@ -789,10 +789,10 @@ internal static class SettingsStore
                 settings.UnlockedSeconds = ReadInt(key, UnlockedSecondsValue, settings.UnlockedSeconds);
                 settings.LockedEnabled = ReadBool(key, LockedEnabledValue, settings.LockedEnabled);
                 settings.LockedSeconds = ReadInt(key, LockedSecondsValue, settings.LockedSeconds);
-                settings.EnforceMs = ReadInt(key, EnforceMsValue, settings.EnforceMs);
                 settings.MinimizeToTray = ReadBool(key, MinimizeToTrayValue, settings.MinimizeToTray);
                 settings.LockOnSleep = ReadBool(key, LockOnSleepValue, settings.LockOnSleep);
                 settings.ConfirmExit = ReadBool(key, ConfirmExitValue, settings.ConfirmExit);
+                settings.AutoStartEnforcement = ReadBool(key, AutoStartValue, settings.AutoStartEnforcement);
                 settings.Theme = ReadInt(key, ThemeValue, settings.Theme);
             }
         }
@@ -818,10 +818,10 @@ internal static class SettingsStore
                 key.SetValue(UnlockedSecondsValue, settings.UnlockedSeconds, RegistryValueKind.DWord);
                 key.SetValue(LockedEnabledValue, settings.LockedEnabled ? 1 : 0, RegistryValueKind.DWord);
                 key.SetValue(LockedSecondsValue, settings.LockedSeconds, RegistryValueKind.DWord);
-                key.SetValue(EnforceMsValue, settings.EnforceMs, RegistryValueKind.DWord);
                 key.SetValue(MinimizeToTrayValue, settings.MinimizeToTray ? 1 : 0, RegistryValueKind.DWord);
                 key.SetValue(LockOnSleepValue, settings.LockOnSleep ? 1 : 0, RegistryValueKind.DWord);
                 key.SetValue(ConfirmExitValue, settings.ConfirmExit ? 1 : 0, RegistryValueKind.DWord);
+                key.SetValue(AutoStartValue, settings.AutoStartEnforcement ? 1 : 0, RegistryValueKind.DWord);
                 key.SetValue(ThemeValue, settings.Theme, RegistryValueKind.DWord);
             }
         }
@@ -1131,6 +1131,7 @@ internal sealed class Enforcer
 internal sealed class MainForm : Form
 {
     private const string AppVersion = "1.0.0";
+    private const double RecheckSeconds = 2.0;
     private const string TaskName = "DisplaySleepEnforcer";
     private const string RunKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
     private const string RunValueName = "DisplaySleepEnforcer";
@@ -1141,13 +1142,13 @@ internal sealed class MainForm : Form
     private readonly NumericUpDown _lockedHours;
     private readonly NumericUpDown _lockedMinutes;
     private readonly NumericUpDown _lockedSeconds;
-    private readonly NumericUpDown _enforceNum;
     private readonly Button _startButton;
     private readonly Button _forceButton;
     private readonly CheckBox _trayCheck;
     private readonly CheckBox _unlockedCheck;
     private readonly CheckBox _lockedCheck;
     private readonly CheckBox _startupCheck;
+    private readonly CheckBox _autoStartCheck;
     private readonly CheckBox _lockOnSleepCheck;
     private readonly CheckBox _confirmExitCheck;
     private readonly Label _statusLabel;
@@ -1159,6 +1160,7 @@ internal sealed class MainForm : Form
     private bool _closing;
     private bool _loadingSettings;
     private bool _startupVerified;
+    private bool _autoStarted;
     private int _themeMode = Theme.SystemMode;
     private bool _dark;
     private readonly DarkMenuRenderer _darkMenuRenderer = new DarkMenuRenderer();
@@ -1173,7 +1175,7 @@ internal sealed class MainForm : Form
         FormBorderStyle = FormBorderStyle.FixedSingle;
         MaximizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(420, 480);
+        ClientSize = new Size(420, 432);
         Font = new Font("Segoe UI", 9F);
 
         _appIcon = LoadAppIcon();
@@ -1190,9 +1192,9 @@ internal sealed class MainForm : Form
         _toolTip.SetToolTip(_unlockedCheck,
             "Turn displays off after the PC has been idle this long while it is unlocked.");
 
-        _unlockedHours = CreateTimeSpinner(new Point(244, 12), 99, 0);
-        _unlockedMinutes = CreateTimeSpinner(new Point(304, 12), 59, 15);
-        _unlockedSeconds = CreateTimeSpinner(new Point(364, 12), 59, 0);
+        _unlockedHours = CreateTimeSpinner(new Point(244, 12), 99, 0, "Hours");
+        _unlockedMinutes = CreateTimeSpinner(new Point(304, 12), 59, 15, "Minutes");
+        _unlockedSeconds = CreateTimeSpinner(new Point(364, 12), 59, 0, "Seconds");
 
         Label unlockedColon1 = new Label();
         unlockedColon1.Text = ":";
@@ -1212,9 +1214,9 @@ internal sealed class MainForm : Form
         _toolTip.SetToolTip(_lockedCheck,
             "Turn displays off this long after the PC is locked, overriding display power requests.");
 
-        _lockedHours = CreateTimeSpinner(new Point(244, 48), 99, 0);
-        _lockedMinutes = CreateTimeSpinner(new Point(304, 48), 59, 1);
-        _lockedSeconds = CreateTimeSpinner(new Point(364, 48), 59, 0);
+        _lockedHours = CreateTimeSpinner(new Point(244, 48), 99, 0, "Hours");
+        _lockedMinutes = CreateTimeSpinner(new Point(304, 48), 59, 1, "Minutes");
+        _lockedSeconds = CreateTimeSpinner(new Point(364, 48), 59, 0, "Seconds");
 
         Label lockedColon1 = new Label();
         lockedColon1.Text = ":";
@@ -1226,36 +1228,24 @@ internal sealed class MainForm : Form
         lockedColon2.Location = new Point(351, 52);
         lockedColon2.AutoSize = true;
 
-        Label enforceLabel = new Label();
-        enforceLabel.Text = "Re-check interval (seconds):";
-        enforceLabel.Location = new Point(12, 88);
-        enforceLabel.AutoSize = true;
-
-        _enforceNum = new NumericUpDown();
-        _enforceNum.Location = new Point(298, 84);
-        _enforceNum.Size = new Size(110, 23);
-        _enforceNum.DecimalPlaces = 1;
-        _enforceNum.Minimum = 0.2m;
-        _enforceNum.Maximum = 60m;
-        _enforceNum.Increment = 0.5m;
-        _enforceNum.Value = 2m;
-
-        _trayCheck = new CheckBox();
-        _trayCheck.Text = "Minimize to tray";
-        _trayCheck.Location = new Point(12, 124);
-        _trayCheck.AutoSize = true;
-        _trayCheck.Checked = true;
-
         _startupCheck = new CheckBox();
-        _startupCheck.Text = "Start automatically when I sign in";
-        _startupCheck.Location = new Point(12, 148);
+        _startupCheck.Text = "Start DSE automatically when I sign in to Windows";
+        _startupCheck.Location = new Point(12, 88);
         _startupCheck.AutoSize = true;
         _startupCheck.Checked = IsStartupEnabled();
         _startupCheck.CheckedChanged += StartupCheckChanged;
 
+        _autoStartCheck = new CheckBox();
+        _autoStartCheck.Text = "Enable enforcement immediately on start";
+        _autoStartCheck.Location = new Point(12, 112);
+        _autoStartCheck.AutoSize = true;
+        _toolTip.SetToolTip(_autoStartCheck,
+            "Starts enforcement automatically as soon as the app opens, using the mode " +
+            "checkboxes above. Otherwise the app opens stopped and you press Start yourself.");
+
         _lockOnSleepCheck = new CheckBox();
         _lockOnSleepCheck.Text = "Lock the PC when the display turns off";
-        _lockOnSleepCheck.Location = new Point(12, 172);
+        _lockOnSleepCheck.Location = new Point(12, 136);
         _lockOnSleepCheck.AutoSize = true;
         _lockOnSleepCheck.CheckedChanged += LockOnSleepCheckChanged;
         _toolTip.SetToolTip(_lockOnSleepCheck,
@@ -1264,32 +1254,38 @@ internal sealed class MainForm : Form
 
         _confirmExitCheck = new CheckBox();
         _confirmExitCheck.Text = "Ask before exiting";
-        _confirmExitCheck.Location = new Point(12, 196);
+        _confirmExitCheck.Location = new Point(12, 160);
         _confirmExitCheck.AutoSize = true;
         _toolTip.SetToolTip(_confirmExitCheck,
             "Show a confirmation prompt before the app closes, so the tray Exit item " +
             "cannot shut it down by accident.");
 
+        _trayCheck = new CheckBox();
+        _trayCheck.Text = "Minimize to tray";
+        _trayCheck.Location = new Point(12, 184);
+        _trayCheck.AutoSize = true;
+        _trayCheck.Checked = true;
+
         _startButton = new Button();
         _startButton.Text = "Start";
-        _startButton.Location = new Point(12, 228);
+        _startButton.Location = new Point(12, 216);
         _startButton.Size = new Size(194, 32);
         _startButton.Click += StartButtonClick;
 
         _forceButton = new Button();
         _forceButton.Text = "Force displays off now";
-        _forceButton.Location = new Point(214, 228);
+        _forceButton.Location = new Point(214, 216);
         _forceButton.Size = new Size(194, 32);
         _forceButton.Click += ForceButtonClick;
 
         _statusLabel = new Label();
         _statusLabel.Text = "Stopped.";
-        _statusLabel.Location = new Point(12, 274);
+        _statusLabel.Location = new Point(12, 262);
         _statusLabel.AutoSize = true;
 
         _logBox = new TextBox();
-        _logBox.Location = new Point(12, 300);
-        _logBox.Size = new Size(396, 168);
+        _logBox.Location = new Point(12, 288);
+        _logBox.Size = new Size(396, 132);
         _logBox.Multiline = true;
         _logBox.ReadOnly = true;
         _logBox.ScrollBars = ScrollBars.Vertical;
@@ -1308,12 +1304,11 @@ internal sealed class MainForm : Form
         Controls.Add(_lockedMinutes);
         Controls.Add(lockedColon2);
         Controls.Add(_lockedSeconds);
-        Controls.Add(enforceLabel);
-        Controls.Add(_enforceNum);
-        Controls.Add(_trayCheck);
         Controls.Add(_startupCheck);
+        Controls.Add(_autoStartCheck);
         Controls.Add(_lockOnSleepCheck);
         Controls.Add(_confirmExitCheck);
+        Controls.Add(_trayCheck);
         Controls.Add(_startButton);
         Controls.Add(_forceButton);
         Controls.Add(_statusLabel);
@@ -1382,9 +1377,9 @@ internal sealed class MainForm : Form
         _unlockedCheck.CheckedChanged += SettingsChanged;
         _lockedCheck.CheckedChanged += SettingsChanged;
         _trayCheck.CheckedChanged += SettingsChanged;
+        _autoStartCheck.CheckedChanged += SettingsChanged;
         _lockOnSleepCheck.CheckedChanged += SettingsChanged;
         _confirmExitCheck.CheckedChanged += SettingsChanged;
-        _enforceNum.ValueChanged += SettingsChanged;
         _unlockedHours.ValueChanged += SettingsChanged;
         _unlockedMinutes.ValueChanged += SettingsChanged;
         _unlockedSeconds.ValueChanged += SettingsChanged;
@@ -1406,8 +1401,8 @@ internal sealed class MainForm : Form
             SetTimeSpinners(_unlockedHours, _unlockedMinutes, _unlockedSeconds, settings.UnlockedSeconds);
             _lockedCheck.Checked = settings.LockedEnabled;
             SetTimeSpinners(_lockedHours, _lockedMinutes, _lockedSeconds, settings.LockedSeconds);
-            _enforceNum.Value = ClampEnforce(settings.EnforceMs);
             _trayCheck.Checked = settings.MinimizeToTray;
+            _autoStartCheck.Checked = settings.AutoStartEnforcement;
             _lockOnSleepCheck.Checked = settings.LockOnSleep;
             _confirmExitCheck.Checked = settings.ConfirmExit;
         }
@@ -1499,27 +1494,13 @@ internal sealed class MainForm : Form
         settings.UnlockedSeconds = (int)Math.Round(GetUnlockedSeconds());
         settings.LockedEnabled = _lockedCheck.Checked;
         settings.LockedSeconds = (int)Math.Round(GetLockedSeconds());
-        settings.EnforceMs = (int)Math.Round((double)_enforceNum.Value * 1000.0);
         settings.MinimizeToTray = _trayCheck.Checked;
+        settings.AutoStartEnforcement = _autoStartCheck.Checked;
         settings.LockOnSleep = _lockOnSleepCheck.Checked;
         settings.ConfirmExit = _confirmExitCheck.Checked;
         settings.Theme = _themeMode;
 
         SettingsStore.Save(settings);
-    }
-
-    private static decimal ClampEnforce(int milliseconds)
-    {
-        decimal value = (decimal)milliseconds / 1000m;
-        if (value < 0.2m)
-        {
-            value = 0.2m;
-        }
-        if (value > 60m)
-        {
-            value = 60m;
-        }
-        return value;
     }
 
     private static void SetTimeSpinners(NumericUpDown hours, NumericUpDown minutes, NumericUpDown seconds, int totalSeconds)
@@ -1803,6 +1784,16 @@ internal sealed class MainForm : Form
 
     private void MainFormShown(object sender, EventArgs e)
     {
+        if (!_autoStarted)
+        {
+            _autoStarted = true;
+
+            if (_autoStartCheck.Checked)
+            {
+                StartEnforcement(false);
+            }
+        }
+
         if (_startupVerified)
         {
             return;
@@ -1941,6 +1932,11 @@ internal sealed class MainForm : Form
             return;
         }
 
+        StartEnforcement(true);
+    }
+
+    private void StartEnforcement(bool interactive)
+    {
         bool unlockedEnabled = _unlockedCheck.Checked;
         bool lockedEnabled = _lockedCheck.Checked;
         double unlockedSeconds = GetUnlockedSeconds();
@@ -1948,37 +1944,42 @@ internal sealed class MainForm : Form
 
         if (!unlockedEnabled && !lockedEnabled)
         {
-            MessageBox.Show(this,
-                "Select at least one mode: enforce when unlocked and/or when locked.",
-                "Display Sleep Enforcer",
-                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            ReportStartProblem(interactive, "Select at least one mode: enforce when unlocked and/or when locked.");
             return;
         }
 
         if (unlockedEnabled && unlockedSeconds < 1.0)
         {
-            MessageBox.Show(this,
-                "Please set the unlocked idle time to at least 1 second.",
-                "Display Sleep Enforcer",
-                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            ReportStartProblem(interactive, "Please set the unlocked idle time to at least 1 second.");
             return;
         }
 
         if (lockedEnabled && lockedSeconds < 1.0)
         {
-            MessageBox.Show(this,
-                "Please set the locked idle time to at least 1 second.",
-                "Display Sleep Enforcer",
+            ReportStartProblem(interactive, "Please set the locked idle time to at least 1 second.");
+            return;
+        }
+
+        string modes = "unlocked=" +
+            (unlockedEnabled ? unlockedSeconds + "s" : "off") +
+            ", locked=" + (lockedEnabled ? lockedSeconds + "s" : "off") + ".";
+
+        AppendLog(interactive ? "Start pressed." : "Started enforcing automatically.");
+        _enforcer.Start(unlockedSeconds, unlockedEnabled,
+            lockedSeconds, lockedEnabled, RecheckSeconds);
+        SetUiRunning(true);
+    }
+
+    private void ReportStartProblem(bool interactive, string message)
+    {
+        if (interactive)
+        {
+            MessageBox.Show(this, message, "Display Sleep Enforcer",
                 MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
 
-        AppendLog("Start pressed: unlocked=" +
-            (unlockedEnabled ? unlockedSeconds + "s" : "off") +
-            ", locked=" + (lockedEnabled ? lockedSeconds + "s" : "off") + ".");
-        _enforcer.Start(unlockedSeconds, unlockedEnabled,
-            lockedSeconds, lockedEnabled, (double)_enforceNum.Value);
-        SetUiRunning(true);
+        AppendLog("Automatic start skipped: " + message);
     }
 
     private double GetUnlockedSeconds()
@@ -1991,7 +1992,7 @@ internal sealed class MainForm : Form
         return (double)(_lockedHours.Value * 3600 + _lockedMinutes.Value * 60 + _lockedSeconds.Value);
     }
 
-    private static NumericUpDown CreateTimeSpinner(Point location, int maximum, int value)
+    private NumericUpDown CreateTimeSpinner(Point location, int maximum, int value, string tooltip)
     {
         NumericUpDown spinner = new NumericUpDown();
         spinner.Location = location;
@@ -1999,6 +2000,7 @@ internal sealed class MainForm : Form
         spinner.Minimum = 0;
         spinner.Maximum = maximum;
         spinner.Value = value;
+        _toolTip.SetToolTip(spinner, tooltip);
         return spinner;
     }
 
@@ -2011,7 +2013,6 @@ internal sealed class MainForm : Form
         _lockedHours.Enabled = !running;
         _lockedMinutes.Enabled = !running;
         _lockedSeconds.Enabled = !running;
-        _enforceNum.Enabled = !running;
         _unlockedCheck.Enabled = !running;
         _lockedCheck.Enabled = !running;
 
