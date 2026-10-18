@@ -52,6 +52,10 @@ DisableProgramGroupPage=yes
 ; per-machine install in the wizard, which triggers elevation.
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
+; Do not silently reuse the mode of a previous install. Without this, Setup sees an
+; existing all-users (admin-mode) install in HKLM and elevates immediately at launch,
+; so the user never gets to choose "just me" without a UAC prompt.
+UsePreviousPrivileges=no
 OutputDir=..\compiled
 OutputBaseFilename=DSE-Setup
 Compression=lzma2

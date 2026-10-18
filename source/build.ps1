@@ -38,8 +38,12 @@ $compiledDir = Join-Path $projectDir 'compiled'
 
 $exePath = Join-Path $compiledDir 'DisplaySleepEnforcer.exe'
 $icoPath = Join-Path $sourceDir 'DSE.ico'
-$csPath  = Join-Path $sourceDir 'DisplaySleepEnforcer.cs'
 $issPath = Join-Path $sourceDir 'DSE.iss'
+
+# The application is split across several files under source\; compile them all.
+$csFiles = @(Get-ChildItem -LiteralPath $sourceDir -Recurse -Filter '*.cs' |
+    Sort-Object FullName | Select-Object -ExpandProperty FullName)
+if ($csFiles.Count -eq 0) { throw "No C# source files found in $sourceDir." }
 
 $csc  = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 $iscc = Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 6\ISCC.exe'
@@ -108,7 +112,7 @@ Write-Host '[1/3] Generating icon...'
 
 Write-Host '[2/3] Compiling application...'
 & $csc /nologo /target:winexe /optimize+ "/out:$exePath" "/win32icon:$icoPath" `
-    /r:System.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll $csPath
+    /r:System.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll $csFiles
 if ($LASTEXITCODE -ne 0) { throw "Application compile failed (exit $LASTEXITCODE)." }
 
 Write-Host '[3/3] Building installer...'
