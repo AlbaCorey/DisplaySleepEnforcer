@@ -30,10 +30,10 @@ DSE works around this by temporarily overriding the global Windows policy `"Allo
 - **Tray minimization** (optional).
 - **Confirm before exiting** (optional) — asks for confirmation before DSE closes, so the tray **Exit** item cannot shut it down by accident. The prompt is skipped during a Windows shutdown.
 - **Remembers your settings** — timers, checkboxes, and appearance are saved and restored on the next launch.
-- **Enforcement can start automatically** — tick **"Start enforcing when DSE opens"** and DSE begins enforcing the moment it launches, using whichever modes are selected. Otherwise it opens stopped and you press **Start** yourself.
+- **Enforcement can start automatically** — tick **"Enable enforcement immediately on start"** and DSE begins enforcing the moment it launches, using whichever modes are selected. Otherwise it opens stopped and you press **Turn on** yourself.
 - **Light/dark appearance** — follows the Windows theme by default; switch to Light or Dark any time from the tray menu's **Appearance** submenu. The installer also lets you pick the initial theme.
 - **Per-user installer** or per-machine installer (choice on first wizard page).
-- **Starts with Windows by default** — opt out in the installer or toggle "Start automatically when I sign in" in the app. DSE registers a per-user Task Scheduler logon task with restart-on-failure, and verifies/repairs it on every launch (for example if the app has moved), warning you if it cannot.
+- **Starts with Windows by default** — opt out in the installer or toggle "Start DSE automatically when I sign in to Windows" in the app. DSE registers a per-user Task Scheduler logon task with restart-on-failure, and verifies/repairs it on every launch (for example if the app has moved), warning you if it cannot.
 
 ## Requirements
 
@@ -53,14 +53,14 @@ You can also run the portable `DisplaySleepEnforcer.exe` directly (it's included
 ## How to use
 
 1. Launch "Display Sleep Enforcer" (from Start Menu/Desktop, or it starts automatically if sign-in startup is on).
-   - Use the **"Start automatically when I sign in"** checkbox to turn sign-in startup on/off at any time.
+   - Use the **"Start DSE automatically when I sign in to Windows"** checkbox to turn sign-in startup on/off at any time.
 2. Choose the modes you want with the two checkboxes, each with its own **hh:mm:ss** timeout:
    - **"Enforce when locked"** (checked by default, `00:01:00`): turns the displays off this long after the PC is locked, overriding display power requests so the screen can go off even while media keeps playing.
    - **"Enforce when unlocked"** (unchecked by default, `00:15:00`): turns the displays off after the PC has been idle this long while it is unlocked.
    - Either, both, or neither can be selected. The unlocked countdown pauses while the PC is locked.
-3. Press **Start**.
+3. Press **Turn on**.
 
-To have DSE begin enforcing the moment it opens — for example when it starts with Windows — tick **"Start enforcing when DSE opens"**. It uses whichever modes you selected; otherwise DSE opens stopped and you press **Start** yourself.
+To have DSE begin enforcing the moment it opens — for example when it starts with Windows — tick **"Enable enforcement immediately on start"**. It uses whichever modes you selected; otherwise DSE opens stopped and you press **Turn on** yourself.
 
 To turn the displays off immediately at any time, use **"Force displays off now"** — the button in the window or the right-click item on the tray icon. This works whether or not enforcement is running.
 
@@ -76,7 +76,7 @@ To guard against closing DSE by accident, tick **"Ask before exiting"** — a co
 - **Global policy**: while locked, DSE writes `ALLOWDISPLAY=0` for the active power scheme (AC/DC). This is a system-wide setting change — it's necessary to ignore all display power requests. DSE captures and restores the original values on unlock/stop/exit.
 - **Crash recovery**: before editing the power plan, DSE saves the original values to `HKCU\Software\DisplaySleepEnforcer\Recovery` and registers a one-shot `RunOnce` cleanup (`DisplaySleepEnforcer.exe --restore-power`). If the process is hard-killed, the next launch restores the values and logs what it undid, then clears the record. A clean stop clears it immediately. The `RunOnce` entry restores the power plan at the next sign-in **independently of the start-at-sign-in setting**, so the system-wide change cannot outlive a crash even if DSE never runs again.
 - **Damaged recovery record**: if `HKCU\Software\DisplaySleepEnforcer\Recovery` is ever edited or truncated by hand, DSE logs "could not be restored" at startup and will not overwrite the record, so automatic recovery stays off until the key is cleared. DSE never leaves the key in that state itself.
-- **Saved settings**: your timer values, checkboxes, and appearance are stored in `HKCU\Software\DisplaySleepEnforcer\Settings` and restored on the next launch. Enforcement starts stopped unless **"Start enforcing when DSE opens"** is ticked.
+- **Saved settings**: your timer values, checkboxes, and appearance are stored in `HKCU\Software\DisplaySleepEnforcer\Settings` and restored on the next launch. Enforcement starts stopped unless **"Enable enforcement immediately on start"** is ticked.
 - **Unsigned binary**: no Authenticode signature; expect SmartScreen warnings.
 - **Not admin required**: powercfg writes for the active scheme succeed for a standard user via the Power service, and the per-user logon task is created without elevation.
 - **Sign-in task**: sign-in startup is a per-user Task Scheduler logon task named `DisplaySleepEnforcer`, not a `Run` key. The installer seeds the old `Run` value so startup works before the app first runs; the app converts it to the task and removes the value. Uninstalling removes the task.

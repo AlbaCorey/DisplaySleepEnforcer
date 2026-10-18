@@ -1167,6 +1167,7 @@ internal sealed class MainForm : Form
     private readonly ToolStripMenuItem _appearanceSystem;
     private readonly ToolStripMenuItem _appearanceLight;
     private readonly ToolStripMenuItem _appearanceDark;
+    private readonly ToolStripMenuItem _trayToggleItem;
     private IntPtr _displayNotify = IntPtr.Zero;
 
     public MainForm()
@@ -1228,20 +1229,20 @@ internal sealed class MainForm : Form
         lockedColon2.Location = new Point(351, 52);
         lockedColon2.AutoSize = true;
 
-        _startupCheck = new CheckBox();
-        _startupCheck.Text = "Start DSE automatically when I sign in to Windows";
-        _startupCheck.Location = new Point(12, 88);
-        _startupCheck.AutoSize = true;
-        _startupCheck.Checked = IsStartupEnabled();
-        _startupCheck.CheckedChanged += StartupCheckChanged;
-
         _autoStartCheck = new CheckBox();
         _autoStartCheck.Text = "Enable enforcement immediately on start";
-        _autoStartCheck.Location = new Point(12, 112);
+        _autoStartCheck.Location = new Point(12, 88);
         _autoStartCheck.AutoSize = true;
         _toolTip.SetToolTip(_autoStartCheck,
             "Starts enforcement automatically as soon as the app opens, using the mode " +
-            "checkboxes above. Otherwise the app opens stopped and you press Start yourself.");
+            "checkboxes above. Otherwise the app opens stopped and you press Turn on yourself.");
+
+        _startupCheck = new CheckBox();
+        _startupCheck.Text = "Start DSE automatically when I sign in to Windows";
+        _startupCheck.Location = new Point(12, 112);
+        _startupCheck.AutoSize = true;
+        _startupCheck.Checked = IsStartupEnabled();
+        _startupCheck.CheckedChanged += StartupCheckChanged;
 
         _lockOnSleepCheck = new CheckBox();
         _lockOnSleepCheck.Text = "Lock the PC when the display turns off";
@@ -1267,7 +1268,7 @@ internal sealed class MainForm : Form
         _trayCheck.Checked = true;
 
         _startButton = new Button();
-        _startButton.Text = "Start";
+        _startButton.Text = "Turn on";
         _startButton.Location = new Point(12, 216);
         _startButton.Size = new Size(194, 32);
         _startButton.Click += StartButtonClick;
@@ -1304,8 +1305,8 @@ internal sealed class MainForm : Form
         Controls.Add(_lockedMinutes);
         Controls.Add(lockedColon2);
         Controls.Add(_lockedSeconds);
-        Controls.Add(_startupCheck);
         Controls.Add(_autoStartCheck);
+        Controls.Add(_startupCheck);
         Controls.Add(_lockOnSleepCheck);
         Controls.Add(_confirmExitCheck);
         Controls.Add(_trayCheck);
@@ -1322,7 +1323,9 @@ internal sealed class MainForm : Form
         _tray.Visible = true;
         ContextMenuStrip menu = new ContextMenuStrip();
         menu.Items.Add("Show", null, delegate { RestoreFromTray(); });
-        menu.Items.Add("Start / Stop", null, delegate { ToggleEnforcement(); });
+        _trayToggleItem = new ToolStripMenuItem("Turn on");
+        _trayToggleItem.Click += delegate { ToggleEnforcement(); };
+        menu.Items.Add(_trayToggleItem);
         menu.Items.Add("Force displays off now", null, delegate { ForceDisplayOff(); });
         menu.Items.Add(new ToolStripSeparator());
 
@@ -2006,7 +2009,8 @@ internal sealed class MainForm : Form
 
     private void SetUiRunning(bool running)
     {
-        _startButton.Text = running ? "Stop" : "Start";
+        _startButton.Text = running ? "Turn off" : "Turn on";
+        _trayToggleItem.Text = running ? "Turn off" : "Turn on";
         _unlockedHours.Enabled = !running;
         _unlockedMinutes.Enabled = !running;
         _unlockedSeconds.Enabled = !running;
