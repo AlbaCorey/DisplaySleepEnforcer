@@ -2,7 +2,7 @@
 
 **Status:** Stable (v1.0.0)
 
-Display Sleep Enforcer (DSE) is a small Windows tray application that forces displays to turn off after an idle timeout. Two things set it apart: it enforces display sleep when applications (media players, browsers, etc.) are holding active display power requests, including while the PC is locked; and it can lock the PC the moment the display turns off — a feature that Windows obscures.
+Display Sleep Enforcer (DSE) is a small Windows tray application that forces displays to turn off after an idle timeout. Two things set it apart: it enforces display sleep when applications (media players, browsers, etc.) are holding active display power requests, whether or not the PC is locked; and it can lock the PC the moment the display turns off — a feature that Windows obscures.
 
 ## Screenshots
 
@@ -14,15 +14,15 @@ Display Sleep Enforcer (DSE) is a small Windows tray application that forces dis
 
 Normally, when an app holds a "display required" power request (e.g. a video player or web video prevents the screen from dimming/off), Windows ignores its normal idle display timeout. When the PC is locked, this becomes problematic: even if the system's lock-screen timeout would normally turn the display off, an active request keeps it on. This is especially worrisome for OLED users.
 
-DSE works around this by temporarily overriding the global Windows policy `"Allow display required policy"` (setting it to `No`) while the PC is locked. That makes Windows ignore display power requests, allowing the display to turn off while the PC remains locked and media continues playing. It also restores the original policy on unlock, stop, or exit.
+DSE works around this by temporarily overriding the global Windows policy `"Allow display required policy"` (setting it to `No`), which makes Windows ignore display power requests. The override is held for as long as the active mode applies — the whole locked period with locked enforcement, or the entire run while unlocked enforcement is on — allowing the display to turn off even while media continues playing. DSE restores the original policy whenever it no longer applies (for example on unlock when only locked enforcement is selected), and on stop or exit.
 
 ## Features
 
 - **Two independent timers** — one for **unlocked** (idle) enforcement and one for **locked** enforcement. Enable either or both; each has its own `hh:mm:ss` timeout.
   - **Locked** (enabled by default, `00:01:00`): turns displays off N seconds after the workstation is locked, overriding display power requests.
-  - **Unlocked** (disabled by default, `00:15:00`): turns displays off when the system has been idle for N seconds while unlocked.
-- **Displays power requests are overridden while locked** — handles media players, browsers, etc.
-- **Re-asserts** the policy periodically while locked to prevent other software from undoing it.
+  - **Unlocked** (disabled by default, `00:15:00`): turns displays off when the system has been idle for N seconds while unlocked, overriding display power requests.
+- **Displays power requests are overridden while enforcement is active** — handles media players, browsers, etc. during both locked and unlocked enforcement.
+- **Re-asserts** the policy periodically while it is active to prevent other software from undoing it.
 - **Force displays off now** — a button and a tray-menu item that turn the displays off immediately, whether or not enforcement is running.
 - **Lock the PC when the display turns off** — a safeguard Windows does not provide conveniently. It works independently of Start/Stop for as long as DSE is running, and reacts to any cause of display-off (the power plan, unlocked enforcement, or a manual "Force displays off now").
 - **Crash recovery** — if DSE is killed before it can undo its power-plan edits, the original values are restored on the next launch, and a one-shot `RunOnce` entry restores them at the next sign-in even if DSE is never launched again.
@@ -56,7 +56,7 @@ You can also run the portable `DisplaySleepEnforcer.exe` directly (it's included
    - Use the **"Start DSE automatically when I sign in to Windows"** checkbox to turn sign-in startup on/off at any time.
 2. Choose the modes you want with the two checkboxes, each with its own **hh:mm:ss** timeout:
    - **"Enforce when locked"** (checked by default, `00:01:00`): turns the displays off this long after the PC is locked, overriding display power requests so the screen can go off even while media keeps playing.
-   - **"Enforce when unlocked"** (unchecked by default, `00:15:00`): turns the displays off after the PC has been idle this long while it is unlocked.
+   - **"Enforce when unlocked"** (unchecked by default, `00:15:00`): turns the displays off after the PC has been idle this long while it is unlocked, overriding display power requests so the screen can go off even while media keeps playing.
    - Either, both, or neither can be selected. The unlocked countdown pauses while the PC is locked.
 3. Press **Turn on**.
 
@@ -72,7 +72,8 @@ To guard against closing DSE by accident, tick **"Ask before exiting"** — a co
 
 ## Notes & caveats
 
-- **Testing**: v1.0.0 was validated by an automated robustness pass on Windows 11 — single-instance guard, crash recovery, settings persistence and malformed-settings fallback, start-at-sign-in task self-heal and legacy migration, exit paths, and headless `--restore-power`. Two machines have been exercised so far, so sleep/hibernate and RDP-specific behavior are still not extensively verified — please file an issue if something misbehaves.- **Global policy**: while locked, DSE writes `ALLOWDISPLAY=0` for the active power scheme (AC/DC). This is a system-wide setting change — it's necessary to ignore all display power requests. DSE captures and restores the original values on unlock/stop/exit.
+- **Testing**: v1.0.0 was validated by an automated robustness pass on Windows 11 — single-instance guard, crash recovery, settings persistence and malformed-settings fallback, start-at-sign-in task self-heal and legacy migration, exit paths, and headless `--restore-power`. Two machines have been exercised so far, so sleep/hibernate and RDP-specific behavior are still not extensively verified — please file an issue if something misbehaves.
+- **Global policy**: whenever an enforcement mode applies (the whole locked period with locked enforcement selected, or the entire run with unlocked enforcement selected), DSE writes `ALLOWDISPLAY=0` for the active power scheme (AC/DC). This is a system-wide setting change — it's necessary to ignore all display power requests. DSE captures and restores the original values whenever the override is no longer needed, and on stop/exit.
 - **Crash recovery**: before editing the power plan, DSE saves the original values to `HKCU\Software\DisplaySleepEnforcer\Recovery` and registers a one-shot `RunOnce` cleanup (`DisplaySleepEnforcer.exe --restore-power`). If the process is hard-killed, the next launch restores the values and logs what it undid, then clears the record. A clean stop clears it immediately. The `RunOnce` entry restores the power plan at the next sign-in **independently of the start-at-sign-in setting**, so the system-wide change cannot outlive a crash even if DSE never runs again.
 - **Damaged recovery record**: if `HKCU\Software\DisplaySleepEnforcer\Recovery` is ever edited or truncated by hand, DSE discards the stale record at startup, logs that it did so, and captures a fresh record the next time enforcement starts. A damaged record can never leave automatic recovery switched off.
 - **Saved settings**: your timer values, checkboxes, and appearance are stored in `HKCU\Software\DisplaySleepEnforcer\Settings` and restored on the next launch. Enforcement starts stopped unless **"Enable enforcement immediately on start"** is ticked.
@@ -84,9 +85,10 @@ To guard against closing DSE by accident, tick **"Ask before exiting"** — a co
 
 - Detects lock/unlock via `SystemEvents.SessionSwitch` with a debounced desktop-name fallback.
 - **Unlocked** and **locked** enforcement are independent, each with its own enable toggle and timeout.
-- While locked: sets the "console lock display off timeout" (`VIDEOCONLOCK`) to the configured **locked** timeout plus a 5-second margin (so Windows schedules the display-off), and sets `ALLOWDISPLAY=0` ("Allow display required policy" = No) to override display power requests.
-- Re-asserts `ALLOWDISPLAY=0` roughly every 40 seconds while locked in case another application resets it.
-- On unlock/stop: restores both `VIDEOCONLOCK` and `ALLOWDISPLAY` to their original values.
+- While locked: sets the "console lock display off timeout" (`VIDEOCONLOCK`) to the configured **locked** timeout plus a 5-second margin (so Windows schedules the display-off).
+- Whenever an enforcement mode applies — the whole locked period with locked enforcement, or the entire run with unlocked enforcement — sets `ALLOWDISPLAY=0` ("Allow display required policy" = No) to override display power requests.
+- Re-asserts `ALLOWDISPLAY=0` periodically while it is active in case another application resets it.
+- Restores `ALLOWDISPLAY` as soon as no active mode needs it (for example on unlock when unlocked enforcement is off) and at stop; `VIDEOCONLOCK` is restored at stop.
 - The same 5-second margin applies to **unlocked** enforcement, so the display turns off `N + 5` seconds after the last input — but only while unlocked (the unlocked countdown pauses once the PC is locked).
 - **Lock on display off** subscribes the main window to `GUID_CONSOLE_DISPLAY_STATE` power notifications and calls `LockWorkStation()` whenever the console reports the display off — it does not depend on the Start/Stop state.
 - **Start-at-sign-in uses Task Scheduler**: DSE creates a per-user logon task (`DisplaySleepEnforcer`) that ignores new instances, has no execution time limit, and restarts the app up to three times (one minute apart) if it exits with a failure. On each launch, when the option is on, DSE checks that the task exists and that its action points at the current executable, re-registering it if not. If it still cannot confirm the task, it logs a warning and shows a message box. Upgrading from a version that used the `HKCU\...\Run` key migrates that entry to the task automatically.

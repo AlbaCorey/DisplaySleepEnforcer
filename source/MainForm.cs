@@ -83,7 +83,8 @@ internal sealed partial class MainForm : Form
         _unlockedCheck.AutoSize = true;
         _unlockedCheck.Checked = false;
         _toolTip.SetToolTip(_unlockedCheck,
-            "Turn displays off after the PC has been idle this long while it is unlocked.");
+            "Turn displays off after the PC has been idle this long while it is unlocked, " +
+            "overriding display power requests.");
 
         _unlockedHours = CreateTimeSpinner(new Point(244, 12), 99, 0, "Hours");
         _unlockedMinutes = CreateTimeSpinner(new Point(304, 12), 59, 15, "Minutes");

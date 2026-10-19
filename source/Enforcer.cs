@@ -20,8 +20,9 @@ using System.Threading;
 
 internal sealed class Enforcer
 {
-    // While locked the suppression is re-written every this many loop passes
-    // (~5s at the 250 ms lock-check cadence) to defeat anything that resets it.
+    // While the suppression is active it is re-written every this many loop
+    // passes (~5s at the 250 ms lock-check cadence) to defeat anything that
+    // resets it.
     private const int ReassertIntervalIterations = 20;
 
     private const double CountdownDelaySeconds = 5.0;
@@ -82,12 +83,16 @@ internal sealed class Enforcer
         uint unlockedThreshold = (uint)((_unlockedSeconds + CountdownDelaySeconds) * 1000.0);
         int delay = (int)(_enforceSeconds * 1000.0);
         bool forced = false;
+        bool suppressWarned = false;
         int sinceReassert = 0;
+
+        if (_lockedEnabled || _unlockedEnabled)
+        {
+            _recoveryCaptured = PowerRecovery.Capture();
+        }
 
         if (_lockedEnabled)
         {
-            _recoveryCaptured = PowerRecovery.Capture();
-
             uint lockedSeconds = (uint)Math.Round(_lockedSeconds + CountdownDelaySeconds);
             if (_lockTimeout.Apply(lockedSeconds))
             {
@@ -119,29 +124,47 @@ internal sealed class Enforcer
                     _wasLocked = lockedNow;
                     Raise(lockedNow ? "PC locked." : "PC unlocked.");
 
-                    if (_lockedEnabled)
+                    if (_lockedEnabled && lockedNow)
                     {
-                        if (lockedNow)
-                        {
-                            Raise("Locked countdown started.");
-
-                            if (_requestPolicy.Suppress())
-                            {
-                                Raise("Overriding display power requests so the screen can turn off while locked.");
-                            }
-                            else
-                            {
-                                Raise("Warning: could not override display power requests.");
-                            }
-                        }
-                        else
-                        {
-                            _requestPolicy.Restore();
-                        }
+                        Raise("Locked countdown started.");
                     }
                 }
 
-                if (_lockedEnabled && _wasLocked)
+                // Suppress display power requests for as long as the active mode
+                // applies: the whole locked period with locked enforcement on, and
+                // the whole run while unlocked enforcement is on. Windows then
+                // ignores app display requests, so the lock-screen timeout and
+                // idle enforcement can actually turn the display off even when
+                // media keeps playing.
+                bool suppressNow = (_lockedEnabled && lockedNow) ||
+                    (_unlockedEnabled && !lockedNow);
+
+                if (suppressNow && !_requestPolicy.Suppressed)
+                {
+                    if (_requestPolicy.Suppress())
+                    {
+                        suppressWarned = false;
+                        Raise(lockedNow
+                            ? "Overriding display power requests so the screen can turn off while locked."
+                            : "Overriding display power requests so the screen can turn off when idle.");
+                    }
+                    else if (!suppressWarned)
+                    {
+                        // Retried every pass; only the first failure is logged.
+                        suppressWarned = true;
+                        Raise("Warning: could not override display power requests.");
+                    }
+                }
+                else if (!suppressNow && _requestPolicy.Suppressed)
+                {
+                    _requestPolicy.Restore();
+                }
+                else if (!suppressNow)
+                {
+                    suppressWarned = false;
+                }
+
+                if (_requestPolicy.Suppressed)
                 {
                     sinceReassert++;
                     if (sinceReassert >= ReassertIntervalIterations)

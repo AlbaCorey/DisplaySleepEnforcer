@@ -22,6 +22,11 @@ internal sealed class DisplayRequestPolicy
     private bool _captured;
     private bool _suppressed;
 
+    public bool Suppressed
+    {
+        get { return _suppressed; }
+    }
+
     // Setting "Allow display required policy" to No (0) makes Windows ignore
     // display power requests from all applications, so the display can still
     // turn off while locked even when a media player is holding it awake.
