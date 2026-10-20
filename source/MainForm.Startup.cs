@@ -254,6 +254,14 @@ internal sealed partial class MainForm
             if (SetStartupEnabled(true) && IsStartupRegistrationHealthy())
             {
                 AppendLog("Will start automatically when you sign in.");
+
+                // Offer to also begin enforcing as soon as the app opens, since
+                // that is usually what someone wants when it starts with Windows.
+                if (!_autoStartCheck.Checked)
+                {
+                    OfferAutoStartEnforcement();
+                }
+
                 return;
             }
         }
@@ -274,6 +282,28 @@ internal sealed partial class MainForm
         _startupCheck.CheckedChanged -= StartupCheckChanged;
         _startupCheck.Checked = IsStartupEnabled();
         _startupCheck.CheckedChanged += StartupCheckChanged;
+    }
+
+    // Asks whether enforcement should also begin immediately on start. Called
+    // when the user turns on start-at-sign-in, since enforcement starting at
+    // sign-in is the usual companion choice. Checking the box saves the setting
+    // through the normal SettingsChanged path.
+    private void OfferAutoStartEnforcement()
+    {
+        DialogResult answer = MessageBox.Show(this,
+            "Also enable \"Enable enforcement immediately on start\", so " +
+            "Display Sleep Enforcer begins enforcing as soon as it opens " +
+            "(including when it starts with Windows)?",
+            "Display Sleep Enforcer",
+            MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+
+        if (answer != DialogResult.Yes)
+        {
+            return;
+        }
+
+        _autoStartCheck.Checked = true;
+        AppendLog("Will also start enforcing immediately on start.");
     }
 
     private void MainFormShown(object sender, EventArgs e)

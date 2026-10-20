@@ -1,6 +1,6 @@
 # Display Sleep Enforcer
 
-**Status:** Stable (v1.0.2)
+**Status:** Stable (v1.0.3)
 
 Display Sleep Enforcer (DSE) is a small Windows tray application that forces displays to turn off after an idle timeout. Two things set it apart: it enforces display sleep when applications (media players, browsers, etc.) are holding active display power requests, whether or not the PC is locked; and it can lock the PC the moment the display turns off — a feature that Windows obscures.
 
@@ -30,7 +30,7 @@ DSE works around this by temporarily overriding the global Windows policy `"Allo
 - **Tray minimization** (optional).
 - **Confirm before exiting** (optional) — asks for confirmation before DSE closes, so the tray **Exit** item cannot shut it down by accident. The prompt is skipped during a Windows shutdown.
 - **Remembers your settings** — timers, checkboxes, and appearance are saved and restored on the next launch.
-- **Enforcement can start automatically** — tick **"Enable enforcement immediately on start"** and DSE begins enforcing the moment it launches, using whichever modes are selected. Otherwise it opens stopped and you press **Turn on** yourself.
+- **Enforcement can start automatically** — tick **"Enable enforcement immediately on start"** and DSE begins enforcing the moment it launches, using whichever modes are selected. Otherwise it opens stopped and you press **Turn on** yourself. When you turn on start-at-sign-in (in the app) or leave the sign-in startup task selected (in the installer), DSE asks whether to enable this too.
 - **Light/dark appearance** — follows the Windows theme by default; switch to Light or Dark any time from the tray menu's **Appearance** submenu. The installer also lets you pick the initial theme.
 - **Per-user installer** or per-machine installer (choice on first wizard page).
 - **Starts with Windows by default** — opt out in the installer or toggle "Start DSE automatically when I sign in to Windows" in the app. DSE registers a per-user Task Scheduler logon task with restart-on-failure, and verifies/repairs it on every launch (for example if the app has moved), warning you if it cannot. The task launches DSE minimized, so signing in does not pop a window up.
@@ -72,7 +72,7 @@ To guard against closing DSE by accident, tick **"Ask before exiting"** — a co
 
 ## Notes & caveats
 
-- **Testing**: v1.0.0 was validated by an automated robustness pass on Windows 11 — single-instance guard, crash recovery, settings persistence and malformed-settings fallback, start-at-sign-in task self-heal and legacy migration, exit paths, and headless `--restore-power`. The minimized sign-in startup added in v1.0.2 (`--minimized`) was verified the same way: tray-hidden and taskbar-minimized startup, auto-start enforcement while minimized, clean power restore on exit, and task self-heal when the path or the `--minimized` argument is stale. Two machines have been exercised so far, so sleep/hibernate and RDP-specific behavior are still not extensively verified — please file an issue if something misbehaves.
+- **Testing**: v1.0.0 was validated by an automated robustness pass on Windows 11 — single-instance guard, crash recovery, settings persistence and malformed-settings fallback, start-at-sign-in task self-heal and legacy migration, exit paths, and headless `--restore-power`. The minimized sign-in startup added in v1.0.2 (`--minimized`) was verified the same way: tray-hidden and taskbar-minimized startup, auto-start enforcement while minimized, clean power restore on exit, and task self-heal when the path or the `--minimized` argument is stale. The sign-in-startup enforcement prompt added in v1.0.3 was verified in the app (Yes enables the setting, No leaves it off, already-on does not prompt) and in the installer (silent install writes the setting only when the startup task is selected). Two machines have been exercised so far, so sleep/hibernate and RDP-specific behavior are still not extensively verified — please file an issue if something misbehaves.
 - **Global policy**: whenever an enforcement mode applies (the whole locked period with locked enforcement selected, or the entire run with unlocked enforcement selected), DSE writes `ALLOWDISPLAY=0` for the active power scheme (AC/DC). This is a system-wide setting change — it's necessary to ignore all display power requests. DSE captures and restores the original values whenever the override is no longer needed, and on stop/exit.
 - **Crash recovery**: before editing the power plan, DSE saves the original values to `HKCU\Software\DisplaySleepEnforcer\Recovery` and registers a one-shot `RunOnce` cleanup (`DisplaySleepEnforcer.exe --restore-power`). If the process is hard-killed, the next launch restores the values and logs what it undid, then clears the record. A clean stop clears it immediately. The `RunOnce` entry restores the power plan at the next sign-in **independently of the start-at-sign-in setting**, so the system-wide change cannot outlive a crash even if DSE never runs again.
 - **Damaged recovery record**: if `HKCU\Software\DisplaySleepEnforcer\Recovery` is ever edited or truncated by hand, DSE discards the stale record at startup, logs that it did so, and captures a fresh record the next time enforcement starts. A damaged record can never leave automatic recovery switched off.
@@ -119,7 +119,7 @@ theming and the enforcement loop); `compiled/` is build output and should never 
 
 Bug reports and feature requests are welcome on the [issue tracker](https://github.com/AlbaCorey/DisplaySleepEnforcer/issues). When reporting a display-sleep problem, please include:
 
-- The DSE version (the release you installed, e.g. `1.0.2`).
+- The DSE version (the release you installed, e.g. `1.0.3`).
 - Your Windows version and build (`winver`).
 - Which modes you enabled (locked, unlocked, or both) and the timeout(s) you set.
 - Whether it happens with a specific app (media players, remote desktop, and so on).

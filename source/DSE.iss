@@ -23,7 +23,7 @@
 ; ---------------------------------------------------------------------------
 
 #define AppName      "Display Sleep Enforcer"
-#define AppVersion   "1.0.2"
+#define AppVersion   "1.0.3"
 #define AppPublisher "DSE Project"
 #define AppExeName   "DisplaySleepEnforcer.exe"
 
@@ -93,6 +93,10 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Tasks: deskto
 ; path in the window between install and first launch. --minimized makes that
 ; startup open in the notification area rather than popping a window up.
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "DisplaySleepEnforcer"; ValueData: """{app}\{#AppExeName}"" --minimized"; Tasks: startup; Flags: uninsdeletevalue
+; When the user keeps sign-in startup on, seed "Enable enforcement immediately
+; on start" according to their answer on the follow-up page. The app manages
+; this value afterwards.
+Root: HKCU; Subkey: "Software\DisplaySleepEnforcer\Settings"; ValueType: dword; ValueName: "AutoStartEnforcement"; ValueData: "1"; Check: ShouldAutoStartEnforcement
 ; Initial appearance (0 = follow system, 1 = light, 2 = dark). Written once at
 ; install; the app manages it afterwards. Not removed on uninstall.
 Root: HKCU; Subkey: "Software\DisplaySleepEnforcer\Settings"; ValueType: dword; ValueName: "Theme"; ValueData: "0"; Check: ThemeIsSystem
@@ -109,10 +113,25 @@ Filename: "schtasks.exe"; Parameters: "/Delete /TN ""DisplaySleepEnforcer"" /F";
 [Code]
 var
   ThemePage: TInputOptionWizardPage;
+  AutoStartPage: TInputOptionWizardPage;
 
 procedure InitializeWizard();
 begin
-  ThemePage := CreateInputOptionPage(wpSelectTasks,
+  { Follow-up to the "start with Windows" task: offer to also begin enforcing
+    as soon as the app opens. Shown only when sign-in startup is selected. }
+  AutoStartPage := CreateInputOptionPage(wpSelectTasks,
+    'Startup enforcement',
+    'Start enforcing as soon as {#AppName} opens?',
+    '{#AppName} will start automatically when you sign in to Windows. If you ' +
+    'also turn on "Enable enforcement immediately on start", it begins ' +
+    'enforcing right away (including at sign-in) using the modes you select in ' +
+    'the app. Otherwise it opens stopped and you press Turn on yourself.',
+    True, False);
+  AutoStartPage.Add('Also enable enforcement immediately on start');
+  AutoStartPage.Add('No, open stopped (I will press Turn on myself)');
+  AutoStartPage.Values[0] := True;
+
+  ThemePage := CreateInputOptionPage(AutoStartPage.ID,
     'Appearance',
     'Choose how {#AppName} looks.',
     'Select a theme. You can change this later from the tray icon menu.',
@@ -121,6 +140,19 @@ begin
   ThemePage.Add('Light');
   ThemePage.Add('Dark');
   ThemePage.Values[0] := True;
+end;
+
+function ShouldSkipPage(PageID: Integer): Boolean;
+begin
+  { The enforcement-on-start question only makes sense when sign-in startup is
+    on, so skip it when the user unticked that task. }
+  Result := (PageID = AutoStartPage.ID) and (not IsTaskSelected('startup'));
+end;
+
+function ShouldAutoStartEnforcement(): Boolean;
+begin
+  Result := IsTaskSelected('startup') and
+            (AutoStartPage <> nil) and AutoStartPage.Values[0];
 end;
 
 function ThemeIsSystem(): Boolean;
