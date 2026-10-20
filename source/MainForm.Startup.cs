@@ -67,8 +67,9 @@ internal sealed partial class MainForm
         return RunSchTasks("/Query /TN \"" + TaskName + "\"", out output) == 0;
     }
 
-    // The task is current when it exists and its action still points at this
-    // executable, so a moved or reinstalled copy repairs itself.
+    // The task is current when it exists, its action still points at this
+    // executable (so a moved or reinstalled copy repairs itself), and it starts
+    // the app minimized as the current version does.
     private static bool IsStartupTaskCurrent()
     {
         string output;
@@ -78,7 +79,12 @@ internal sealed partial class MainForm
             return false;
         }
 
-        return output.IndexOf(Application.ExecutablePath, StringComparison.OrdinalIgnoreCase) >= 0;
+        if (output.IndexOf(Application.ExecutablePath, StringComparison.OrdinalIgnoreCase) < 0)
+        {
+            return false;
+        }
+
+        return output.IndexOf(StartMinimizedArgument, StringComparison.OrdinalIgnoreCase) >= 0;
     }
 
     private static bool IsStartupEnabled()
@@ -99,7 +105,8 @@ internal sealed partial class MainForm
 
         // A per-user logon task that ignores new instances, starts even on
         // battery, has no execution time limit, and restarts up to three times
-        // (one minute apart) if the app exits with a failure.
+        // (one minute apart) if the app exits with a failure. It launches the
+        // app with --minimized so signing in does not pop up a window.
         return
             "<?xml version=\"1.0\" encoding=\"UTF-16\"?>" +
             "<Task version=\"1.2\" xmlns=\"http://schemas.microsoft.com/windows/2004/02/mit/task\">" +
@@ -125,6 +132,7 @@ internal sealed partial class MainForm
             "</Settings>" +
             "<Actions Context=\"Author\"><Exec>" +
             "<Command>" + exe + "</Command>" +
+            "<Arguments>" + StartMinimizedArgument + "</Arguments>" +
             "<WorkingDirectory>" + dir + "</WorkingDirectory>" +
             "</Exec></Actions>" +
             "</Task>";
@@ -270,6 +278,16 @@ internal sealed partial class MainForm
 
     private void MainFormShown(object sender, EventArgs e)
     {
+        // Started with Windows: don't pop a window up at sign-in. Setting the
+        // state now that the handle exists triggers FormResize, which hides the
+        // window to the tray when minimize-to-tray is on; otherwise it just
+        // shows minimized in the taskbar.
+        if (_startMinimized)
+        {
+            _startMinimized = false;
+            WindowState = FormWindowState.Minimized;
+        }
+
         if (!_autoStarted)
         {
             _autoStarted = true;

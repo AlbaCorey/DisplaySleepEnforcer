@@ -1,6 +1,6 @@
 # Display Sleep Enforcer
 
-**Status:** Stable (v1.0.1)
+**Status:** Stable (v1.0.2)
 
 Display Sleep Enforcer (DSE) is a small Windows tray application that forces displays to turn off after an idle timeout. Two things set it apart: it enforces display sleep when applications (media players, browsers, etc.) are holding active display power requests, whether or not the PC is locked; and it can lock the PC the moment the display turns off — a feature that Windows obscures.
 
@@ -33,7 +33,7 @@ DSE works around this by temporarily overriding the global Windows policy `"Allo
 - **Enforcement can start automatically** — tick **"Enable enforcement immediately on start"** and DSE begins enforcing the moment it launches, using whichever modes are selected. Otherwise it opens stopped and you press **Turn on** yourself.
 - **Light/dark appearance** — follows the Windows theme by default; switch to Light or Dark any time from the tray menu's **Appearance** submenu. The installer also lets you pick the initial theme.
 - **Per-user installer** or per-machine installer (choice on first wizard page).
-- **Starts with Windows by default** — opt out in the installer or toggle "Start DSE automatically when I sign in to Windows" in the app. DSE registers a per-user Task Scheduler logon task with restart-on-failure, and verifies/repairs it on every launch (for example if the app has moved), warning you if it cannot.
+- **Starts with Windows by default** — opt out in the installer or toggle "Start DSE automatically when I sign in to Windows" in the app. DSE registers a per-user Task Scheduler logon task with restart-on-failure, and verifies/repairs it on every launch (for example if the app has moved), warning you if it cannot. The task launches DSE minimized, so signing in does not pop a window up.
 
 ## Requirements
 
@@ -72,14 +72,14 @@ To guard against closing DSE by accident, tick **"Ask before exiting"** — a co
 
 ## Notes & caveats
 
-- **Testing**: v1.0.0 was validated by an automated robustness pass on Windows 11 — single-instance guard, crash recovery, settings persistence and malformed-settings fallback, start-at-sign-in task self-heal and legacy migration, exit paths, and headless `--restore-power`. Two machines have been exercised so far, so sleep/hibernate and RDP-specific behavior are still not extensively verified — please file an issue if something misbehaves.
+- **Testing**: v1.0.0 was validated by an automated robustness pass on Windows 11 — single-instance guard, crash recovery, settings persistence and malformed-settings fallback, start-at-sign-in task self-heal and legacy migration, exit paths, and headless `--restore-power`. The minimized sign-in startup added in v1.0.2 (`--minimized`) was verified the same way: tray-hidden and taskbar-minimized startup, auto-start enforcement while minimized, clean power restore on exit, and task self-heal when the path or the `--minimized` argument is stale. Two machines have been exercised so far, so sleep/hibernate and RDP-specific behavior are still not extensively verified — please file an issue if something misbehaves.
 - **Global policy**: whenever an enforcement mode applies (the whole locked period with locked enforcement selected, or the entire run with unlocked enforcement selected), DSE writes `ALLOWDISPLAY=0` for the active power scheme (AC/DC). This is a system-wide setting change — it's necessary to ignore all display power requests. DSE captures and restores the original values whenever the override is no longer needed, and on stop/exit.
 - **Crash recovery**: before editing the power plan, DSE saves the original values to `HKCU\Software\DisplaySleepEnforcer\Recovery` and registers a one-shot `RunOnce` cleanup (`DisplaySleepEnforcer.exe --restore-power`). If the process is hard-killed, the next launch restores the values and logs what it undid, then clears the record. A clean stop clears it immediately. The `RunOnce` entry restores the power plan at the next sign-in **independently of the start-at-sign-in setting**, so the system-wide change cannot outlive a crash even if DSE never runs again.
 - **Damaged recovery record**: if `HKCU\Software\DisplaySleepEnforcer\Recovery` is ever edited or truncated by hand, DSE discards the stale record at startup, logs that it did so, and captures a fresh record the next time enforcement starts. A damaged record can never leave automatic recovery switched off.
 - **Saved settings**: your timer values, checkboxes, and appearance are stored in `HKCU\Software\DisplaySleepEnforcer\Settings` and restored on the next launch. Enforcement starts stopped unless **"Enable enforcement immediately on start"** is ticked.
 - **Unsigned binary**: no Authenticode signature; expect SmartScreen warnings.
 - **Not admin required**: powercfg writes for the active scheme succeed for a standard user via the Power service, and the per-user logon task is created without elevation.
-- **Sign-in task**: sign-in startup is a per-user Task Scheduler logon task named `DisplaySleepEnforcer`, not a `Run` key. The installer seeds the old `Run` value so startup works before the app first runs; the app converts it to the task and removes the value. Uninstalling removes the task.
+- **Sign-in task**: sign-in startup is a per-user Task Scheduler logon task named `DisplaySleepEnforcer`, not a `Run` key. The task launches DSE with `--minimized`, so it opens in the notification area instead of showing a window; the installer seeds the same `Run` value so startup works before the app first runs, and the app converts it to the task and removes the value. Uninstalling removes the task.
 
 ## How it works
 
@@ -91,7 +91,7 @@ To guard against closing DSE by accident, tick **"Ask before exiting"** — a co
 - Restores `ALLOWDISPLAY` as soon as no active mode needs it (for example on unlock when unlocked enforcement is off) and at stop; `VIDEOCONLOCK` is restored at stop.
 - The same 5-second margin applies to **unlocked** enforcement, so the display turns off `N + 5` seconds after the last input — but only while unlocked (the unlocked countdown pauses once the PC is locked).
 - **Lock on display off** subscribes the main window to `GUID_CONSOLE_DISPLAY_STATE` power notifications and calls `LockWorkStation()` whenever the console reports the display off — it does not depend on the Start/Stop state.
-- **Start-at-sign-in uses Task Scheduler**: DSE creates a per-user logon task (`DisplaySleepEnforcer`) that ignores new instances, has no execution time limit, and restarts the app up to three times (one minute apart) if it exits with a failure. On each launch, when the option is on, DSE checks that the task exists and that its action points at the current executable, re-registering it if not. If it still cannot confirm the task, it logs a warning and shows a message box. Upgrading from a version that used the `HKCU\...\Run` key migrates that entry to the task automatically.
+- **Start-at-sign-in uses Task Scheduler**: DSE creates a per-user logon task (`DisplaySleepEnforcer`) that ignores new instances, has no execution time limit, and restarts the app up to three times (one minute apart) if it exits with a failure. The task passes `--minimized`, so the app opens minimized (hidden to the tray when "Minimize to tray" is on) rather than popping a window up at sign-in. On each launch, when the option is on, DSE checks that the task exists, that its action points at the current executable, and that it still passes `--minimized`, re-registering it if not. If it still cannot confirm the task, it logs a warning and shows a message box. Upgrading from a version that used the `HKCU\...\Run` key migrates that entry to the task automatically.
 - A named mutex enforces a single running instance, so a second copy cannot undo the power-plan changes out from under the live one.
 
 ## Building from source
@@ -119,7 +119,7 @@ theming and the enforcement loop); `compiled/` is build output and should never 
 
 Bug reports and feature requests are welcome on the [issue tracker](https://github.com/AlbaCorey/DisplaySleepEnforcer/issues). When reporting a display-sleep problem, please include:
 
-- The DSE version (the release you installed, e.g. `1.0.1`).
+- The DSE version (the release you installed, e.g. `1.0.2`).
 - Your Windows version and build (`winver`).
 - Which modes you enabled (locked, unlocked, or both) and the timeout(s) you set.
 - Whether it happens with a specific app (media players, remote desktop, and so on).

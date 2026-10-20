@@ -23,7 +23,7 @@
 ; ---------------------------------------------------------------------------
 
 #define AppName      "Display Sleep Enforcer"
-#define AppVersion   "1.0.1"
+#define AppVersion   "1.0.2"
 #define AppPublisher "DSE Project"
 #define AppExeName   "DisplaySleepEnforcer.exe"
 
@@ -90,8 +90,9 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Tasks: deskto
 ; Seed sign-in startup with a per-user HKCU Run value. On its first launch the
 ; app migrates this to a robust per-user Task Scheduler logon task (with
 ; restart-on-failure) and removes the Run value. This keeps a working startup
-; path in the window between install and first launch.
-Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "DisplaySleepEnforcer"; ValueData: """{app}\{#AppExeName}"""; Tasks: startup; Flags: uninsdeletevalue
+; path in the window between install and first launch. --minimized makes that
+; startup open in the notification area rather than popping a window up.
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "DisplaySleepEnforcer"; ValueData: """{app}\{#AppExeName}"" --minimized"; Tasks: startup; Flags: uninsdeletevalue
 ; Initial appearance (0 = follow system, 1 = light, 2 = dark). Written once at
 ; install; the app manages it afterwards. Not removed on uninstall.
 Root: HKCU; Subkey: "Software\DisplaySleepEnforcer\Settings"; ValueType: dword; ValueName: "Theme"; ValueData: "0"; Check: ThemeIsSystem

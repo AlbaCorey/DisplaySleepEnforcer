@@ -22,11 +22,15 @@ using System.Windows.Forms;
 
 internal sealed partial class MainForm : Form
 {
-    private const string AppVersion = "1.0.1";
+    private const string AppVersion = "1.0.2";
     private const double RecheckSeconds = 2.0;
     private const string TaskName = "DisplaySleepEnforcer";
     private const string RunKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
     private const string RunValueName = "DisplaySleepEnforcer";
+
+    // Passed by the sign-in task (and the installer's Run seed) so the app
+    // opens minimized instead of popping up a window at logon.
+    internal const string StartMinimizedArgument = "--minimized";
 
     private readonly NumericUpDown _unlockedHours;
     private readonly NumericUpDown _unlockedMinutes;
@@ -53,6 +57,7 @@ internal sealed partial class MainForm : Form
     private bool _loadingSettings;
     private bool _startupVerified;
     private bool _autoStarted;
+    private bool _startMinimized;
     private int _themeMode = Theme.SystemMode;
     private bool _dark;
     private readonly DarkMenuRenderer _darkMenuRenderer = new DarkMenuRenderer();
@@ -62,7 +67,7 @@ internal sealed partial class MainForm : Form
     private readonly ToolStripMenuItem _trayToggleItem;
     private IntPtr _displayNotify = IntPtr.Zero;
 
-    public MainForm()
+    public MainForm(bool startMinimized)
     {
         Text = "Display Sleep Enforcer v" + AppVersion;
         FormBorderStyle = FormBorderStyle.FixedSingle;
@@ -248,6 +253,8 @@ internal sealed partial class MainForm : Form
         Resize += FormResize;
         Shown += MainFormShown;
         FormClosing += FormClosingHandler;
+
+        _startMinimized = startMinimized;
     }
 
     private void RunCrashRecovery()

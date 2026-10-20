@@ -33,6 +33,8 @@ internal static class Program
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
 
+        bool startMinimized = WantsStartMinimized(args);
+
         bool createdNew;
         using (Mutex mutex = new Mutex(true, @"Local\DisplaySleepEnforcer.SingleInstance", out createdNew))
         {
@@ -45,7 +47,7 @@ internal static class Program
                 return;
             }
 
-            Application.Run(new MainForm());
+            Application.Run(new MainForm(startMinimized));
         }
     }
 
@@ -59,6 +61,25 @@ internal static class Program
         foreach (string arg in args)
         {
             if (string.Equals(arg, PowerRecovery.RestorePowerArgument, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // Set by the sign-in task so the window opens minimized at logon.
+    private static bool WantsStartMinimized(string[] args)
+    {
+        if (args == null)
+        {
+            return false;
+        }
+
+        foreach (string arg in args)
+        {
+            if (string.Equals(arg, MainForm.StartMinimizedArgument, StringComparison.OrdinalIgnoreCase))
             {
                 return true;
             }
