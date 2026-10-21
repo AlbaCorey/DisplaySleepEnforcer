@@ -76,6 +76,10 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 [Tasks]
 ; Checked by default (opt-out): the user can untick this to skip sign-in startup.
 Name: "startup"; Description: "Start {#AppName} automatically when I sign in"; GroupDescription: "Startup:"
+; The lock-screen slideshow keeps requesting display-on and defeats enforcement,
+; so switching to Picture is recommended. Pre-checked below only when Windows
+; currently has the slideshow on.
+Name: "picturelock"; Description: "Switch the lock screen background to Picture (recommended - a slideshow blocks display sleep)"; GroupDescription: "Lock screen:"; Flags: unchecked
 ; Opt-in: unchecked by default.
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
@@ -102,6 +106,11 @@ Root: HKCU; Subkey: "Software\DisplaySleepEnforcer\Settings"; ValueType: dword; 
 Root: HKCU; Subkey: "Software\DisplaySleepEnforcer\Settings"; ValueType: dword; ValueName: "Theme"; ValueData: "0"; Check: ThemeIsSystem
 Root: HKCU; Subkey: "Software\DisplaySleepEnforcer\Settings"; ValueType: dword; ValueName: "Theme"; ValueData: "1"; Check: ThemeIsLight
 Root: HKCU; Subkey: "Software\DisplaySleepEnforcer\Settings"; ValueType: dword; ValueName: "Theme"; ValueData: "2"; Check: ThemeIsDark
+; Switch the lock-screen background to Picture when requested. This is the
+; same value the Settings app writes when you pick Picture there, so the
+; stored image is kept and only the background type changes. Left in place
+; on uninstall (Picture is the Windows default).
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Lock Screen"; ValueType: dword; ValueName: "SlideshowEnabled"; ValueData: "0"; Tasks: picturelock
 
 [Run]
 Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(AppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
@@ -114,6 +123,39 @@ Filename: "schtasks.exe"; Parameters: "/Delete /TN ""DisplaySleepEnforcer"" /F";
 var
   ThemePage: TInputOptionWizardPage;
   AutoStartPage: TInputOptionWizardPage;
+  LockScreenTaskTouched: Boolean;
+
+function LockScreenSlideshowEnabled(): Boolean;
+var
+  SlideshowEnabled: DWORD;
+begin
+  { 1 = Slideshow; 0 or missing = Picture/Spotlight. Same value the Settings
+    app uses under Personalization > Lock screen. }
+  Result := RegQueryDWordValue(HKCU,
+    'Software\Microsoft\Windows\CurrentVersion\Lock Screen',
+    'SlideshowEnabled', SlideshowEnabled) and (SlideshowEnabled = 1);
+end;
+
+procedure CurPageChanged(CurPageID: Integer);
+var
+  I: Integer;
+begin
+  { Pre-check the Picture task when the lock-screen slideshow is currently on,
+    since that is exactly the setup that defeats enforcement. Only done once so
+    navigating back to the page does not override the user's choice. }
+  if (CurPageID = wpSelectTasks) and (not LockScreenTaskTouched) then
+  begin
+    LockScreenTaskTouched := True;
+    if LockScreenSlideshowEnabled() then
+    begin
+      for I := 0 to WizardForm.TasksList.Items.Count - 1 do
+      begin
+        if Pos('Switch the lock screen background', WizardForm.TasksList.ItemCaption[I]) > 0 then
+          WizardForm.TasksList.Checked[I] := True;
+      end;
+    end;
+  end;
+end;
 
 procedure InitializeWizard();
 begin

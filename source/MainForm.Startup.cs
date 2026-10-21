@@ -306,6 +306,42 @@ internal sealed partial class MainForm
         AppendLog("Will also start enforcing immediately on start.");
     }
 
+    // The lock-screen slideshow keeps requesting display-on, which defeats
+    // enforcement (most visibly in locked mode). Warn once per launch while it
+    // is on and offer to switch the background to Picture.
+    private void CheckLockScreenSlideshow()
+    {
+        if (!LockScreen.IsSlideshowEnabled())
+        {
+            return;
+        }
+
+        IWin32Window owner = Visible ? (IWin32Window)this : null;
+        DialogResult answer = MessageBox.Show(owner,
+            "Your lock screen background is set to Slideshow. The slideshow keeps " +
+            "requesting that the display stay on, so the display may not sleep " +
+            "while Display Sleep Enforcer is enforcing - especially while locked.\n\n" +
+            "Switch the lock screen background to Picture now? You can change it " +
+            "back at any time in Settings > Personalization > Lock screen.",
+            "Display Sleep Enforcer",
+            MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+
+        if (answer != DialogResult.Yes)
+        {
+            AppendLog("Lock screen left on Slideshow; display sleep may not be enforced " +
+                "while the lock screen is active.");
+            return;
+        }
+
+        if (LockScreen.TrySetPictureMode())
+        {
+            AppendLog("Lock screen background switched to Picture (takes effect at the next lock).");
+            return;
+        }
+
+        AppendLog("Warning: could not switch the lock screen background to Picture.");
+    }
+
     private void MainFormShown(object sender, EventArgs e)
     {
         // Started with Windows: don't pop a window up at sign-in. Setting the
@@ -327,6 +363,8 @@ internal sealed partial class MainForm
                 StartEnforcement(false);
             }
         }
+
+        CheckLockScreenSlideshow();
 
         if (_startupVerified)
         {
