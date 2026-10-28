@@ -1,6 +1,6 @@
 # Display Sleep Enforcer
 
-**Status:** Stable (v1.0.4)
+**Status:** Stable (v1.0.5)"title"=""
 
 Display Sleep Enforcer (DSE) is a small Windows tray application that forces displays to turn off after an idle timeout. Two things set it apart: it enforces display sleep when applications (media players, browsers, etc.) are holding active display power requests, whether or not the PC is locked; and it can lock the PC the moment the display turns off — a feature that Windows obscures.
 
@@ -121,7 +121,7 @@ theming and the enforcement loop); `compiled/` is build output and should never 
 
 Bug reports and feature requests are welcome on the [issue tracker](https://github.com/AlbaCorey/DisplaySleepEnforcer/issues). When reporting a display-sleep problem, please include:
 
-- The DSE version (the release you installed, e.g. `1.0.4`).
+- The DSE version (the release you installed, e.g. `1.0.5`).
 - Your Windows version and build (`winver`).
 - Which modes you enabled (locked, unlocked, or both) and the timeout(s) you set.
 - Whether it happens with a specific app (media players, remote desktop, and so on).
