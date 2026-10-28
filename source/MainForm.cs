@@ -22,7 +22,7 @@ using System.Windows.Forms;
 
 internal sealed partial class MainForm : Form
 {
-    private const string AppVersion = "1.0.4";
+    private const string AppVersion = "1.0.5";
     private const double RecheckSeconds = 2.0;
     private const string TaskName = "DisplaySleepEnforcer";
     private const string RunKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";

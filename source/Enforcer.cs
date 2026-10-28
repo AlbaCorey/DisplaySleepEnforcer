@@ -130,14 +130,12 @@ internal sealed class Enforcer
                     }
                 }
 
-                // Suppress display power requests for as long as the active mode
-                // applies: the whole locked period with locked enforcement on, and
-                // the whole run while unlocked enforcement is on. Windows then
-                // ignores app display requests, so the lock-screen timeout and
-                // idle enforcement can actually turn the display off even when
-                // media keeps playing.
-                bool suppressNow = (_lockedEnabled && lockedNow) ||
-                    (_unlockedEnabled && !lockedNow);
+                // Suppress display power requests only while locked with locked
+                // enforcement on. Turning off ALLOWDISPLAY for the entire unlocked
+                // run lets aggressive battery dim timers fire even when apps like
+                // VLC are keeping the display awake, so unlocked enforcement relies
+                // on TurnOffMonitors() when the idle timeout is reached.
+                bool suppressNow = (_lockedEnabled && lockedNow);
 
                 if (suppressNow && !_requestPolicy.Suppressed)
                 {
